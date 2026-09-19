@@ -36,6 +36,7 @@ jobs:
         run: |
           npm ci
           python -m pip install pytest
+          echo "TVTMS_PYTHON=$(python -c 'import sys; print(sys.executable)')" >> "$GITHUB_ENV"
 
       - name: Verify JSX and imports
         run: npm run verify:jsx
