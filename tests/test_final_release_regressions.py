@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PHP = Path(r"C:\tools\php83\php.exe")
+PHP = Path(os.environ.get("TVTMS_PHP", r"C:\tools\php83\php.exe"))
 
 
 def run_php(script: str) -> subprocess.CompletedProcess[str]:
