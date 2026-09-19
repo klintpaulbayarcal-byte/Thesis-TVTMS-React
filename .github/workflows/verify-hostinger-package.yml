@@ -1,6 +1,6 @@
 name: Verify React and PHP Hostinger package
 
-# Validation ONLY: no FTP action, database migration, or live deployment.
+# Validation/package ONLY: no FTP action, database migration, or live deployment.
 on:
   pull_request:
     branches:
@@ -71,6 +71,29 @@ jobs:
       - name: Run PHP contract and regression tests
         run: npm test
 
+      - name: Package verified deployment files
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd deploy && zip -q -r ../TVTMS-Hostinger-React-v4.zip .)
+          unzip -p TVTMS-Hostinger-React-v4.zip index.html > /dev/null
+          unzip -p TVTMS-Hostinger-React-v4.zip api/index.php > /dev/null
+          unzip -p TVTMS-Hostinger-React-v4.zip .htaccess > /dev/null
+          if unzip -Z1 TVTMS-Hostinger-React-v4.zip | grep -Eq '(^|/)(config\.local\.php|\.env|\.env\.local)$|(^|/)uploads/'; then
+            echo 'Refusing artifact: private config or runtime uploads included.' >&2
+            exit 1
+          fi
+          sha256sum TVTMS-Hostinger-React-v4.zip
+
+      - name: Publish deployable archive for controlled Hostinger upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: TVTMS-Hostinger-React-v4
+          path: TVTMS-Hostinger-React-v4.zip
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
 # Production FTPS and Supabase migration are NOT configured by this workflow.
-# Before any separately approved first deployment, verify server PHP support,
-# private server config, upload directory permissions, backup and rollback.
+# Confirm correct Hostinger root, PHP support and private server configuration
+# before the separate live upload. Never delete server-owned runtime uploads.
