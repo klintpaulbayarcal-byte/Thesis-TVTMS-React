@@ -1,0 +1,108 @@
+name: Deploy TVTMS React v4 to Hostinger (one-time guarded)
+
+# One-time deployment request: only a change to this workflow on sync-v4
+# triggers a run. Future application commits never deploy automatically.
+on:
+  push:
+    branches: [sync-v4]
+    paths: ['.github/workflows/deploy-hostinger-v4.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tvtms-hostinger-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      FTP_SERVER: ${{ secrets.FTP_SERVER }}
+      FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+    steps:
+      - name: Check out approved sync-v4 source
+        uses: actions/checkout@v4
+
+      - name: Require exactly the verified FTP destination and configured secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FTP_SERVER" || { echo 'FTP_SERVER secret is missing'; exit 1; }
+          test -n "$FTP_USERNAME" || { echo 'FTP_USERNAME secret is missing'; exit 1; }
+          test -n "$FTP_PASSWORD" || { echo 'FTP_PASSWORD secret is missing'; exit 1; }
+          test "$FTP_SERVER" = '145.223.108.219' || { echo 'FTP_SERVER differs from the approved screenshot; stopping'; exit 1; }
+          test "$FTP_USERNAME" = 'u948876618.trafficviolation' || { echo 'FTP_USERNAME differs from the approved subdomain FTP account; stopping'; exit 1; }
+          echo 'FTP secret names are populated and destination matches the approved FTP account.'
+
+      - name: Install build/test dependencies and secure FTP client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lftp php-cli >/dev/null
+
+      - name: Preflight remote subdomain root and server-only API config (NO WRITES)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Only encrypted FTP; certificate validation must succeed. No plain FTP fallback.
+          options='set cmd:fail-exit yes; set ftp:ssl-force yes; set ftp:ssl-protect-data yes; set ssl:verify-certificate yes; set ftp:passive-mode yes; set net:timeout 15; set net:max-retries 1;'
+          lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER" -e "$options cls -1 /index.html; cls -1 /.htaccess; bye"
+          # Do not download/read or replace config.local.php; require it already exists.
+          lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER" -e "$options cls -1 /api/config/config.local.php; bye"
+          echo 'Remote root and existing private API configuration verified. No remote files changed.'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify source and build Hostinger package
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          python -m pip install pytest
+          echo "TVTMS_PYTHON=$(python -c 'import sys; print(sys.executable)')" >> "$GITHUB_ENV"
+          echo "TVTMS_PHP=$(command -v php)" >> "$GITHUB_ENV"
+          npm run verify:jsx
+          find api -type f -name '*.php' -print0 | xargs -0 -r -n1 php -l
+          npm run build:hostinger
+          npm test
+          test -f deploy/index.html
+          test -f deploy/api/index.php
+          test -f deploy/.htaccess
+          test -f deploy/api/.htaccess
+          test ! -e deploy/uploads
+          test ! -e deploy/api/config/config.local.php
+          test ! -e deploy/.env
+          test ! -e deploy/.env.local
+
+      - name: Upload verified build only (NO DELETE, private config/uploads excluded)
+        shell: bash
+        run: |
+          set -euo pipefail
+          options='set cmd:fail-exit yes; set ftp:ssl-force yes; set ftp:ssl-protect-data yes; set ssl:verify-certificate yes; set ftp:passive-mode yes; set net:timeout 20; set net:max-retries 2;'
+          # lftp mirror -R does not delete remote files without --delete. --all transfers .htaccess.
+          # The packaging step already excludes uploads and config.local.php.
+          lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER" -e "$options mirror -R --all --verbose --no-perms --parallel=2 --exclude-glob uploads/ --exclude-glob config.local.php ./deploy/ /; bye"
+          echo 'FTP upload finished; verifying live site next.'
+
+      - name: Check production website and API health
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 30 'https://trafficviolation.dcsbisu.com/' -o /tmp/tvtms-live-index.html
+          grep -q 'assets/' /tmp/tvtms-live-index.html
+          curl --fail --silent --show-error --location --max-time 30 'https://trafficviolation.dcsbisu.com/api/health' -o /tmp/tvtms-health.json
+          php -r '$x=json_decode(file_get_contents("/tmp/tvtms-health.json"),true); exit(is_array($x)&&($x["success"]??false)===true&&($x["database"]??"")==="connected"?0:1);'
+          echo 'Live homepage and Supabase-connected PHP API health verified.'
