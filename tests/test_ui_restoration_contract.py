@@ -73,13 +73,13 @@ def test_password_reset_reuses_finalized_login_visual_language():
 
 def test_issue_ticket_restores_finalized_form_structure():
     page = text('src/pages/IssueTicket.jsx')
-    for marker in ['New Violation Ticket', 'Vehicle Information', 'Violation Information', 'REPEAT OFFENDER DETECTED', 'ticket-form-actions', 'Instructions']:
+    for marker in ['New Violation Ticket', 'Vehicle Information', 'Violation Information', 'Plate Ticket Count at Issuance', 'Same-Plate/Same-Violation Penalty Level', 'ticket-form-actions', 'Instructions']:
         assert marker in page, f'Issue Ticket should restore finalized marker: {marker}'
 
 
 def test_violator_lookup_restores_finalized_search_and_summary_sections():
     page = text('src/pages/LicensePlateLookup.jsx')
-    for marker in ['lookup-container', 'lookup-section', 'section-title', 'validation-info', 'search-tabs', 'Vehicle Information', 'Violation Summary', 'summary-cards', 'Violation Tickets']:
+    for marker in ['lookup-container', 'lookup-section', 'section-title', 'validation-info', 'search-tabs', 'Vehicle Information', 'Plate Ticket Summary', 'summary-cards', 'Violation Tickets']:
         assert marker in page, f'Violator lookup should restore finalized marker: {marker}'
 
 

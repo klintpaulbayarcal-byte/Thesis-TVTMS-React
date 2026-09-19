@@ -97,6 +97,8 @@ create table if not exists public.tickets (
   time_issued time not null,
   location varchar(200),
   remarks text,
+  plate_ticket_count_at_issue integer not null check (plate_ticket_count_at_issue > 0),
+  same_violation_offense_count_at_issue integer not null check (same_violation_offense_count_at_issue > 0),
   status varchar(20) not null default 'unpaid' check (status in ('unpaid','paid','cancelled')),
   payment_date date,
   created_at timestamptz not null default current_timestamp,
@@ -106,6 +108,12 @@ create table if not exists public.tickets (
 create table if not exists public.ticket_number_sequences (
   sequence_year smallint primary key,
   last_number integer not null default 0,
+  updated_at timestamptz not null default current_timestamp
+);
+
+create table if not exists public.plate_ticket_sequences (
+  normalized_plate text primary key,
+  last_number integer not null check (last_number > 0),
   updated_at timestamptz not null default current_timestamp
 );
 
@@ -261,7 +269,8 @@ select t.id,t.ticket_number,t.date_issued,t.time_issued,t.location,t.status,t.pa
        coalesce(t.owner_name_at_issue,v.owner_name) as owner_name,
        coalesce(t.owner_email_at_issue,v.owner_email) as owner_email,
        coalesce(t.owner_address_at_issue,v.owner_address) as owner_address,
-       v.driver_license_number,viol.violation_code,viol.violation_name,viol.demerit_points
+       v.driver_license_number,viol.violation_code,viol.violation_name,viol.demerit_points,
+       t.plate_ticket_count_at_issue,t.same_violation_offense_count_at_issue
 from public.tickets t
 join public.users u on t.user_id=u.id
 join public.vehicles v on t.vehicle_id=v.id
@@ -307,7 +316,7 @@ do $$
 declare table_name text;
 begin
   foreach table_name in array array['users','owners','vehicles','violations','violation_penalty_rules','tickets',
-    'ticket_number_sequences','ticket_status_history','payments','disputes','evidence','notifications',
+    'ticket_number_sequences','plate_ticket_sequences','ticket_status_history','payments','disputes','evidence','notifications',
     'contact_messages','audit_logs','system_settings']
   loop
     execute format('alter table public.%I enable row level security', table_name);

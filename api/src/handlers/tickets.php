@@ -27,7 +27,15 @@ function ticket_apply_payment_totals(array $tickets, array $payments): array
         $penaltySource=$ticket['penalty_amount_at_issue']??$ticket['penalty_amount']??0;
         $penalty=round((float)$penaltySource,2);
         $ticket['total_paid']=$paid;
-        $ticket['remaining_balance']=round(max(0,$penalty-$paid),2);
+        $ticket['remaining_balance']=strtolower((string)($ticket['status']??''))==='cancelled'
+            ?0.0
+            :round(max(0,$penalty-$paid),2);
+        $storedStatus=strtolower((string)($ticket['status']??''));
+        $ticket['payment_status']=$storedStatus==='cancelled'
+            ?'cancelled'
+            :($ticket['remaining_balance']<=0
+                ?'paid'
+                :($paid>0?'partially_paid':'unpaid'));
     }
     unset($ticket);
     return $tickets;
@@ -163,9 +171,11 @@ function tickets_mark_unpaid(array $params): never
 {
     $u=require_role(['admin']);$id=ticket_valid_id($params['id']??0);$reason=clean_string(json_input()['reason']??'',500);
     if(strlen($reason)<5)fail('A correction reason between 5 and 500 characters is required',400,'VALIDATION_ERROR');
-    $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_mutate',['p_action'=>'unpaid','p_id'=>$id,'p_user_id'=>(int)$u['id'],'p_role'=>$u['role'],'p_data'=>['reason'=>$reason]]));$ticket=$r['ticket']??[];
-    log_audit((int)$u['id'],'TICKET_MARKED_UNPAID','tickets',$id,['ticketNumber'=>$ticket['ticket_number']??null,'voidedPayments'=>(int)($r['voidedPayments']??0),'reason'=>$reason]);
-    ok('Ticket marked unpaid successfully',['id'=>$id,'ticketNumber'=>$ticket['ticket_number']??null,'status'=>'unpaid','voidedPayments'=>(int)($r['voidedPayments']??0)]);
+    $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_mark_unpaid',['p_id'=>$id,'p_user_id'=>(int)$u['id'],'p_role'=>$u['role'],'p_reason'=>$reason]));$ticket=$r['ticket']??[];
+    $voidedIds=array_values(array_map('intval',is_array($r['voidedPaymentIds']??null)?$r['voidedPaymentIds']:[]));
+    $voidedCount=(int)($r['voidedPayments']??count($voidedIds));$voidedAmount=(float)($r['voidedPaymentAmount']??0);
+    log_audit((int)$u['id'],'TICKET_MARKED_UNPAID','tickets',$id,['ticketNumber'=>$ticket['ticket_number']??null,'voidedPayments'=>$voidedCount,'voidedPaymentIds'=>$voidedIds,'voidedPaymentAmount'=>$voidedAmount,'reason'=>$reason]);
+    ok('Ticket marked unpaid successfully',['id'=>$id,'ticketNumber'=>$ticket['ticket_number']??null,'status'=>'unpaid','voidedPayments'=>$voidedCount,'voidedPaymentIds'=>$voidedIds,'voidedPaymentAmount'=>$voidedAmount]);
 }
 
 function tickets_stats(array $params=[]): never

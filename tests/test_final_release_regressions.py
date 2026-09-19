@@ -183,7 +183,9 @@ def test_manual_ticket_status_cannot_fabricate_payment_history():
     valid_statuses = handler.split("$valid=", 1)[1].split(";", 1)[0]
     assert "partially_paid" not in valid_statuses
     assert "status==='partially_paid'" in handler
-    assert "partially_paid" not in migration.split("elsif p_action='status'", 1)[1].split("elsif p_action='details'", 1)[0]
+    status_branch = migration.split("elsif p_action='status'", 1)[1].lower()
+    assert "v_status in ('paid','partially_paid')" in status_branch
+    assert "payment_required" in status_branch
 
 
 def test_evidence_upload_enforces_ticket_count_and_byte_quotas():
@@ -198,5 +200,6 @@ def test_financial_reports_subtract_non_voided_payments_from_penalties():
     payment_status = migration.split("create or replace function public.tvtms_report_payment_status", 1)[1].split("revoke all on function public.tvtms_report_payment_status", 1)[0]
     aging = migration.split("create or replace function public.tvtms_report_aging", 1)[1].split("revoke all on function public.tvtms_report_aging", 1)[0]
     for function_body in (payment_status, aging):
-        assert "payment_status<>'voided'" in function_body
-        assert "greatest(" in function_body
+        normalized = function_body.lower()
+        assert "payment_status<>'voided'" in normalized
+        assert "greatest(" in normalized

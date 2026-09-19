@@ -18,6 +18,7 @@ function vehicles_lookup(array $params = []): never
 
     $v = $vehicles[0];
     $history = supabase_rpc('tvtms_catalog_vehicle_violations', ['p_id' => (int)$v['id']]);
+    $summary = supabase_rpc('tvtms_catalog_vehicle_stats', ['p_id' => (int)$v['id']]);
     $vehicle = [
         'id' => (int)$v['id'],
         'plate_number' => $v['plate_number'],
@@ -30,11 +31,13 @@ function vehicles_lookup(array $params = []): never
         'registered_date' => vehicle_registered_date((int)$v['id']),
     ];
     $history = is_array($history) ? $history : [];
+    $summary = is_array($summary) ? $summary : [];
     json_response([
         'success' => true,
         'vehicle' => $vehicle,
         'violations' => $history,
-        'data' => ['vehicle' => $vehicle, 'violations' => $history],
+        'summary' => $summary,
+        'data' => ['vehicle' => $vehicle, 'violations' => $history, 'summary' => $summary],
     ]);
 }
 
@@ -94,7 +97,7 @@ function vehicles_search(array $params = []): never
     foreach ((is_array($rows) ? $rows : []) as $v) {
         $v['status'] = 'active';
         $v['violation_count'] = (int)($v['violation_count'] ?? 0);
-        $v['is_repeat_offender'] = $v['violation_count'] >= 2;
+        $v['has_multiple_plate_tickets'] = $v['violation_count'] >= 2;
         $items[] = $v;
     }
     json_response(['success' => true, 'vehicles' => $items, 'count' => count($items), 'data' => $items]);
@@ -110,11 +113,14 @@ function vehicles_stats(array $params = []): never
     $s = supabase_rpc('tvtms_catalog_vehicle_stats', ['p_id' => (int)$vehicles[0]['id']]);
     $stats = [
         'total_violations' => (int)($s['total_violations'] ?? 0),
+        'historical_ticket_count' => (int)($s['historical_ticket_count'] ?? $s['total_violations'] ?? 0),
+        'non_cancelled_ticket_count' => (int)($s['non_cancelled_ticket_count'] ?? $s['total_violations'] ?? 0),
         'paid_count' => (int)($s['paid_count'] ?? 0),
         'unpaid_count' => (int)($s['unpaid_count'] ?? 0),
         'cancelled_count' => (int)($s['cancelled_count'] ?? 0),
         'disputed_count' => (int)($s['disputed_count'] ?? 0),
         'outstanding_balance' => (float)($s['outstanding_balance'] ?? 0),
+        'next_plate_ticket_count' => (int)($s['next_plate_ticket_count'] ?? 1),
     ];
     json_response(['success' => true, 'stats' => $stats, 'data' => $stats]);
 }

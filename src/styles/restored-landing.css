@@ -60,4 +60,5 @@
 .landing-section[id]{scroll-margin-top:88px}
 .landing-contact-form>div:not(.wide){display:flex;flex-direction:column;gap:5px}
 .landing-contact-form label{font-size:10px;font-weight:800;color:var(--ink);padding-left:2px}
+.sc-full-plate{display:flex;justify-content:center;padding:9px 10px;border-radius:9px;border:1px solid rgba(96,165,250,.28);background:rgba(37,99,235,.10);color:#bfdbfe;text-decoration:none;font-size:9px;font-weight:800}
 @media(max-width:650px){.legacy-landing{padding-top:66px}}

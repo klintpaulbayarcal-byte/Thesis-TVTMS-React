@@ -8,3 +8,5 @@ api/config/config.local.php
 .pytest_cache/
 __pycache__/
 *.pyc
+*.zip
+*.bak

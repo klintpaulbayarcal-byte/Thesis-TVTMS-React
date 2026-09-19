@@ -27,3 +27,7 @@ This package is not itself proof that the live Supabase project, Hostinger
 runtime, credentials, email transport, QR scanning, printing, or production
 workflows have been verified.
 
+Ticket history/payment change:
+- Review and stage-test supabase/migrations/202609190001_ticket_history_payment_display.sql before application upload.
+- Follow docs/TICKET_HISTORY_PAYMENT_DEPLOYMENT.md from the source review copy.
+- Never overwrite an existing private api/config/config.local.php or runtime uploads directory.

@@ -8,9 +8,13 @@ import { money, dateOnly } from '../utils/format';
 export default function PublicTicketLookup(){
   const [searchParams]=useSearchParams();
   const ticketFromUrl=(searchParams.get('ticket')||'').trim().toUpperCase();
+  const plateFromUrl=(searchParams.get('plate')||'').trim().toUpperCase();
+  const referenceFromUrl=ticketFromUrl||plateFromUrl;
+  const modeFromUrl=ticketFromUrl?'ticket':'plate';
   const lastQrRequest=useRef('');
-  const [mode,setMode]=useState(ticketFromUrl?'ticket':'plate');
-  const [query,setQuery]=useState(ticketFromUrl);
+  const lookupVersion=useRef(0);
+  const [mode,setMode]=useState(modeFromUrl);
+  const [query,setQuery]=useState(referenceFromUrl);
   const [tickets,setTickets]=useState([]);
   const [summary,setSummary]=useState(null);
   const [notice,setNotice]=useState({type:'',text:''});
@@ -23,6 +27,7 @@ export default function PublicTicketLookup(){
   const switchMode=(next)=>{setMode(next);setQuery('');setTickets([]);setSummary(null);setSelected(null);setNotice({type:'',text:''});};
 
   const runLookup=async (reference,lookupMode)=>{
+    const requestVersion=++lookupVersion.current;
     const value=reference.trim().toUpperCase();
     if(value.length<2||value.length>30){
       setNotice({type:'error',text:'Enter a valid reference (2–30 characters).'});
@@ -33,9 +38,10 @@ export default function PublicTicketLookup(){
       const filters=lookupMode==='plate'?{plateNumber:value}:{ticketNumber:value};
       const r=await API.publicTicketLookup(filters);
       const rows=Array.isArray(r.tickets)?r.tickets:(Array.isArray(r.data)?r.data:[]);
+      if(requestVersion!==lookupVersion.current)return;
       setTickets(rows);
       if(lookupMode==='plate'){
-        try{const plate=await API.publicPlateSummary(value);setSummary(plate.summary??null);}catch{/* search results remain usable */}
+        try{const plate=await API.publicPlateSummary(value);if(requestVersion===lookupVersion.current)setSummary(plate.summary??null);}catch{/* search results remain usable */}
       }
       if(!rows.length)setNotice({type:'info',text:'No matching ticket record was found.'});
     }catch(error){setNotice({type:'error',text:error.message});}
@@ -47,16 +53,17 @@ export default function PublicTicketLookup(){
     return runLookup(normalizedQuery,mode);
   };
 
-  // The ticket-only URL is what the printable QR and landing result links encode.
-  // Auto-load it without creating or changing any ticket, and avoid duplicate
+  // Ticket and plate URLs are read-only public lookup entry points.
+  // Auto-load without creating or changing any ticket, and avoid duplicate
   // requests from React StrictMode's development effect replay.
   useEffect(()=>{
-    if(!ticketFromUrl){lastQrRequest.current='';return;}
-    if(ticketFromUrl===lastQrRequest.current)return;
-    lastQrRequest.current=ticketFromUrl;
-    setMode('ticket');setQuery(ticketFromUrl);
-    void runLookup(ticketFromUrl,'ticket');
-  },[ticketFromUrl]);
+    if(!referenceFromUrl){lastQrRequest.current='';return;}
+    const requestKey=`${modeFromUrl}:${referenceFromUrl}`;
+    if(requestKey===lastQrRequest.current)return;
+    lastQrRequest.current=requestKey;
+    setMode(modeFromUrl);setQuery(referenceFromUrl);
+    void runLookup(referenceFromUrl,modeFromUrl);
+  },[referenceFromUrl,modeFromUrl]);
 
   const openDispute=ticket=>{setSelected(ticket);setEmail('');setReason('');setNotice({type:'',text:''});setTimeout(()=>document.getElementById('publicDisputeSection')?.scrollIntoView({behavior:'smooth',block:'center'}),0);};
   const dispute=async event=>{
@@ -102,16 +109,18 @@ export default function PublicTicketLookup(){
 
       <section className="results-section" aria-live="polite">
         {summary&&<div className="plate-summary">
-          <div className="plate-summary-head"><h3>Plate Summary · {normalizedQuery}</h3>{summary.is_repeat_offender&&<StatusBadge value="repeat offender"/>}</div>
+          <div className="plate-summary-head"><h3>Plate Summary · {normalizedQuery}</h3></div>
           <div className="summary-grid">
-            <div className="summary-item"><small>Total Violations</small><strong>{summary.total_violations??0}</strong></div>
+            <div className="summary-item"><small>Historical Tickets</small><strong>{summary.historical_ticket_count??summary.total_violations??0}</strong></div>
+            <div className="summary-item"><small>Non-Cancelled Tickets</small><strong>{summary.non_cancelled_ticket_count??summary.total_violations??0}</strong></div>
             <div className="summary-item"><small>Unpaid</small><strong>{summary.unpaid_count??0}</strong></div>
             <div className="summary-item"><small>Paid</small><strong>{summary.paid_count??0}</strong></div>
-            <div className="summary-item"><small>Outstanding</small><strong>{money(summary.total_unpaid_amount)}</strong></div>
+            <div className="summary-item"><small>Cancelled</small><strong>{summary.cancelled_count??0}</strong></div>
+            <div className="summary-item"><small>Combined Outstanding</small><strong>{money(summary.total_outstanding_balance??summary.total_unpaid_amount)}</strong></div>
           </div>
         </div>}
         {tickets.map(ticket=><article className={`ticket-card status-${ticket.status||'unknown'}`} key={ticket.ticket_number}>
-          <div className="ticket-header"><div><small>Ticket Number</small><h3>{ticket.ticket_number}</h3></div><StatusBadge value={ticket.status}/></div>
+          <div className="ticket-header"><div><small>Ticket Number</small><h3>{ticket.ticket_number}</h3></div><StatusBadge value={ticket.payment_status??ticket.status}/></div>
           <dl className="details-grid">
             <div><dt>Date issued</dt><dd>{dateOnly(ticket.date_issued)}</dd></div><div><dt>Plate number</dt><dd>{ticket.plate_number||'—'}</dd></div>
             <div><dt>Violation</dt><dd>{ticket.violation_name||'—'}</dd></div><div><dt>Penalty</dt><dd>{money(ticket.penalty_amount)}</dd></div>
