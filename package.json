@@ -1,0 +1,30 @@
+{
+  "name": "tvtms-react-php-supabase",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:web": "vite --host 0.0.0.0",
+    "dev:api": "\"C:/tools/php83/php.exe\" -S 127.0.0.1:8000 dev-router.php",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:contracts": "set PATH=C:/tools/php83;%PATH% && python -m pytest -q -s -p no:cacheprovider tests",
+    "test": "set PATH=C:/tools/php83;%PATH% && python -m pytest -q -s -p no:cacheprovider tests",
+    "verify:jsx": "node scripts/verify-jsx.cjs",
+    "package:hostinger": "node scripts/package-hostinger.cjs",
+    "build:hostinger": "npm run build && npm run package:hostinger"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "typescript": "^5.8.3",
+    "vite": "^5.4.11"
+  }
+}

@@ -1,0 +1,10 @@
+node_modules/
+dist/
+deploy/
+api/config/config.local.php
+.env
+.env.*
+!.env.example
+.pytest_cache/
+__pycache__/
+*.pyc
