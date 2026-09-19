@@ -1,0 +1,55 @@
+name: Verify React and PHP Hostinger package
+
+# Validation only. This workflow never connects to FTP or modifies Hostinger.
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Verify React JSX and imports
+        run: npm run verify:jsx
+
+      - name: Check PHP syntax
+        run: |
+          command -v php
+          find api -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Build frontend and assemble PHP deployment package
+        run: npm run build:hostinger
+
+      - name: Verify package contents and private-file exclusions
+        run: |
+          test -f deploy/index.html
+          test -f deploy/api/index.php
+          test -f deploy/.htaccess
+          test -f deploy/api/.htaccess
+          test -f deploy/uploads/.htaccess
+          test ! -e deploy/api/config/config.local.php
+          test ! -e deploy/.env
+          test ! -e deploy/.env.local
+          echo 'Package structure and private-file exclusions checked.'
+
+# The Python regression suite currently hard-codes a Windows PHP executable
+# path, so it is not presented as passing in this Linux-only workflow.
+# Do not add FTP deployment until the server directory, backup/rollback,
+# private server configuration, and old-repository workflow are reviewed.
