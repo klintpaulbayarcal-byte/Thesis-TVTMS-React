@@ -141,9 +141,10 @@ jobs:
         run: |
           set -euo pipefail
           options='set cmd:fail-exit yes; set ftp:ssl-force yes; set ftp:ssl-protect-data yes; set ssl:verify-certificate yes; set ssl:check-hostname no; set ftp:passive-mode yes; set net:timeout 20; set net:max-retries 2;'
-          # lftp mirror -R does not delete remote files without --delete. --all transfers .htaccess.
+          # lftp mirror -R does not delete remote files without --delete.
           # Runtime uploads are never packaged or changed by this release.
-          lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER" -e "$options mirror -R --all --verbose --no-perms --parallel=2 --exclude-glob uploads/ ./deploy/ /; bye"
+          # Upload Apache policy files explicitly; --all belongs to cls, not mirror.
+          lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER" -e "$options mirror -R --verbose --no-perms --parallel=2 --exclude-glob uploads/ ./deploy/ /; put ./deploy/.htaccess -o /.htaccess; put ./deploy/api/.htaccess -o /api/.htaccess; put ./deploy/api/config/.htaccess -o /api/config/.htaccess; cls -1 /index.html; cls -1 /.htaccess; cls -1 /api/index.php; cls -1 /api/config/config.local.php; bye"
           echo 'FTP upload finished; verifying live site next.'
 
       - name: Check production website and API health

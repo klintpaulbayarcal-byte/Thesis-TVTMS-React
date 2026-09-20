@@ -31,9 +31,12 @@ def test_hostinger_deploy_bootstraps_over_ca_verified_ip_ftps():
     assert 'openssl s_client' in workflow
     assert '*.hstgr.io' in workflow
 
-    assert 'cls -1 /index.html' not in workflow
-    assert 'cls -1 /.htaccess' not in workflow
-    assert 'cls -1 /api/config/config.local.php' not in workflow
+    preflight = workflow.split(
+        '- name: preflight hostinger certificate and remote subdomain root (no writes)', 1
+    )[1].split('- name: set up node.js', 1)[0]
+    assert 'cls -1 /index.html' not in preflight
+    assert 'cls -1 /.htaccess' not in preflight
+    assert 'cls -1 /api/config/config.local.php' not in preflight
     assert 'supabase_secret_key: ${{ secrets.supabase_secret_key }}' in workflow
     assert 'tvtms_token_secret: ${{ secrets.tvtms_token_secret }}' in workflow
     assert 'export tvtms_python="$(python -c' in workflow
@@ -48,6 +51,10 @@ def test_hostinger_deploy_bootstraps_over_ca_verified_ip_ftps():
     ]
     assert len(mirror_commands) == 1
     assert '--delete' not in mirror_commands[0]
+    assert '--all' not in mirror_commands[0]
+    assert 'put ./deploy/.htaccess -o /.htaccess' in workflow
+    assert 'put ./deploy/api/.htaccess -o /api/.htaccess' in workflow
+    assert 'put ./deploy/api/config/.htaccess -o /api/config/.htaccess' in workflow
 
 
 def test_plate_lookup_fix_uses_normalized_identity_and_persistent_sequence():
