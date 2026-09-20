@@ -22,9 +22,11 @@ export default function PublicTicketLookup(){
   const [selected,setSelected]=useState(null);
   const [email,setEmail]=useState('');
   const [reason,setReason]=useState('');
+  const [disputeNotice,setDisputeNotice]=useState({type:'',text:''});
+  const [disputeBusy,setDisputeBusy]=useState(false);
   const normalizedQuery=useMemo(()=>query.toUpperCase(),[query]);
 
-  const switchMode=(next)=>{setMode(next);setQuery('');setTickets([]);setSummary(null);setSelected(null);setNotice({type:'',text:''});};
+  const switchMode=(next)=>{setMode(next);setQuery('');setTickets([]);setSummary(null);setSelected(null);setNotice({type:'',text:''});setDisputeNotice({type:'',text:''});};
 
   const runLookup=async (reference,lookupMode)=>{
     const requestVersion=++lookupVersion.current;
@@ -33,7 +35,7 @@ export default function PublicTicketLookup(){
       setNotice({type:'error',text:'Enter a valid reference (2–30 characters).'});
       return;
     }
-    setBusy(true);setNotice({type:'',text:''});setTickets([]);setSummary(null);setSelected(null);
+    setBusy(true);setNotice({type:'',text:''});setTickets([]);setSummary(null);setSelected(null);setDisputeNotice({type:'',text:''});
     try{
       const filters=lookupMode==='plate'?{plateNumber:value}:{ticketNumber:value};
       const r=await API.publicTicketLookup(filters);
@@ -44,8 +46,8 @@ export default function PublicTicketLookup(){
         try{const plate=await API.publicPlateSummary(value);if(requestVersion===lookupVersion.current)setSummary(plate.summary??null);}catch{/* search results remain usable */}
       }
       if(!rows.length)setNotice({type:'info',text:'No matching ticket record was found.'});
-    }catch(error){setNotice({type:'error',text:error.message});}
-    finally{setBusy(false);}
+    }catch(error){if(requestVersion===lookupVersion.current)setNotice({type:'error',text:error.message});}
+    finally{if(requestVersion===lookupVersion.current)setBusy(false);}
   };
 
   const search=event=>{
@@ -65,18 +67,28 @@ export default function PublicTicketLookup(){
     void runLookup(referenceFromUrl,modeFromUrl);
   },[referenceFromUrl,modeFromUrl]);
 
-  const openDispute=ticket=>{setSelected(ticket);setEmail('');setReason('');setNotice({type:'',text:''});setTimeout(()=>document.getElementById('publicDisputeSection')?.scrollIntoView({behavior:'smooth',block:'center'}),0);};
+  const openDispute=ticket=>{
+    if(!ticket.dispute_eligible)return;
+    setSelected(ticket);setEmail('');setReason('');setDisputeNotice({type:'',text:''});
+    setTimeout(()=>document.getElementById('publicDisputeSection')?.scrollIntoView({behavior:'smooth',block:'center'}),0);
+  };
   const dispute=async event=>{
     event.preventDefault();
-    if(!selected||!email.trim()||reason.trim().length<10)return;
+    if(disputeBusy)return;
+    if(!selected||!selected.dispute_eligible){setDisputeNotice({type:'error',text:'Select an eligible ticket before submitting a dispute.'});return;}
+    if(!email.trim()||reason.trim().length<10){setDisputeNotice({type:'error',text:'Enter the owner email recorded on the ticket and a reason of at least 10 characters.'});return;}
+    setDisputeBusy(true);setDisputeNotice({type:'',text:''});
     try{
       await API.publicDispute({ticketNumber:selected.ticket_number,email:email.trim().toLowerCase(),reason:reason.trim()});
       setSelected(null);setEmail('');setReason('');
-      setNotice({type:'success',text:'Your dispute was submitted successfully for administrator review.'});
+      setDisputeNotice({type:'success',text:'Your dispute was submitted successfully for administrator review. The ticket list will update shortly.'});
       const filters=mode==='plate'?{plateNumber:normalizedQuery}:{ticketNumber:normalizedQuery};
-      const refreshed=await API.publicTicketLookup(filters);
-      setTickets(Array.isArray(refreshed.tickets)?refreshed.tickets:[]);
-    }catch(error){setNotice({type:'error',text:error.message});}
+      try{
+        const refreshed=await API.publicTicketLookup(filters);
+        setTickets(Array.isArray(refreshed.tickets)?refreshed.tickets:(Array.isArray(refreshed.data)?refreshed.data:[]));
+      }catch{/* Keep the successful submission confirmation even if refreshing fails. */}
+    }catch(error){setDisputeNotice({type:'error',text:error.message||'Unable to submit the dispute. Please try again.'});}
+    finally{setDisputeBusy(false);}
   };
 
   return <main className="public-lookup-page">
@@ -127,20 +139,21 @@ export default function PublicTicketLookup(){
             <div><dt>Paid</dt><dd>{money(ticket.total_paid)}</dd></div><div><dt>Balance</dt><dd>{money(ticket.remaining_balance)}</dd></div>
             <div className="span-2"><dt>Location</dt><dd>{ticket.location||'—'}</dd></div>
           </dl>
-          {ticket.dispute_eligible?<button className="dispute-trigger" onClick={()=>openDispute(ticket)}>File a Dispute</button>:ticket.dispute_message?<Notice type="info">{ticket.dispute_message}</Notice>:null}
+          {ticket.dispute_eligible?<button type="button" className="dispute-trigger" onClick={()=>openDispute(ticket)}>File a Dispute</button>:ticket.dispute_message?<div className="dispute-ineligible"><strong>Dispute unavailable for this ticket.</strong><Notice type="info">{ticket.dispute_message}</Notice><p>If you need clarification, please contact the issuing office.</p></div>:null}
         </article>)}
       </section>
 
-      <section id="publicDisputeSection" className="dispute-wrap">
+      <section id="publicDisputeSection" className="dispute-wrap" aria-live="polite">
         <div className="dispute-card">
           <div className="dispute-title">⚖ File a Dispute</div>
-          <div className="dispute-desc">Select an eligible ticket, verify the owner email recorded when the ticket was issued, then explain your reason.</div>
-          <form className="dispute-form" onSubmit={dispute}>
-            <div className="selected-ticket-summary">{selected?<>Selected ticket: <strong>{selected.ticket_number}</strong> · {selected.violation_name}</>:<>Select an eligible ticket above before submitting a dispute.</>}</div>
-            <div className="field"><label htmlFor="disputeEmail">Owner Email *</label><input id="disputeEmail" type="email" maxLength="100" required disabled={!selected} value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" placeholder="Email recorded on the ticket" /></div>
-            <div className="field"><label htmlFor="disputeReason">Reason for Dispute *</label><textarea id="disputeReason" rows="4" minLength="10" maxLength="4000" required disabled={!selected} value={reason} onChange={e=>setReason(e.target.value)} placeholder="Please explain why you believe this ticket should be disputed (minimum 10 characters)..." /></div>
-            <button type="submit" className="dispute-submit" disabled={!selected||!email.trim()||reason.trim().length<10}>Submit Dispute</button>
-          </form>
+          <div className="dispute-desc">Choose an eligible ticket above. For an eligible ticket, enter the owner email recorded when it was issued and explain your reason.</div>
+          <Notice type={disputeNotice.type}>{disputeNotice.text}</Notice>
+          {selected?<form className="dispute-form" onSubmit={dispute}>
+            <div className="selected-ticket-summary">Selected ticket: <strong>{selected.ticket_number}</strong> · {selected.violation_name}</div>
+            <div className="field"><label htmlFor="disputeEmail">Owner Email *</label><input id="disputeEmail" type="email" maxLength="100" required disabled={disputeBusy} value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" placeholder="Email recorded on the ticket" /></div>
+            <div className="field"><label htmlFor="disputeReason">Reason for Dispute *</label><textarea id="disputeReason" rows="4" minLength="10" maxLength="4000" required disabled={disputeBusy} value={reason} onChange={e=>setReason(e.target.value)} placeholder="Explain why you believe this ticket should be disputed (at least 10 characters)." /></div>
+            <button type="submit" className="dispute-submit" disabled={disputeBusy||!email.trim()||reason.trim().length<10}>{disputeBusy?'Submitting…':'Submit Dispute'}</button>
+          </form>:<div className="selected-ticket-summary"><strong>No ticket selected.</strong> Select an eligible ticket above to open the dispute form. If a ticket says the dispute period has ended, the online form is unavailable for that ticket.</div>}
         </div>
       </section>
 
