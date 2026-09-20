@@ -1,11 +1,9 @@
-name: Deploy TVTMS React v4 to Hostinger (one-time guarded)
+name: Deploy TVTMS React v4 to Hostinger (guarded)
 
-# One-time deployment request: only a change to this workflow on sync-v4
-# triggers a run. Future application commits never deploy automatically.
+# Every push to sync-v4 deploys only after the guarded verification steps pass.
 on:
   push:
     branches: [sync-v4]
-    paths: ['.github/workflows/deploy-hostinger-v4.yml']
 
 permissions:
   contents: read

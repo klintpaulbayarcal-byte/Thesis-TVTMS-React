@@ -18,6 +18,16 @@ def test_ci_checks_pull_requests_without_requiring_packaged_user_uploads():
     assert 'ftp-deploy-action' not in workflow
 
 
+def test_hostinger_deploy_runs_on_every_sync_v4_push():
+    workflow = read('.github/workflows/deploy-hostinger-v4.yml')
+    trigger = workflow.split('on:', 1)[1].split('permissions:', 1)[0]
+
+    assert 'push:' in trigger
+    assert 'branches: [sync-v4]' in trigger
+    assert 'paths:' not in trigger
+    assert 'paths-ignore:' not in trigger
+
+
 def test_hostinger_deploy_bootstraps_over_ca_verified_ip_ftps():
     """Requiring old remote files or weakening FTPS must block a first GitHub-only release."""
     workflow = read('.github/workflows/deploy-hostinger-v4.yml')
