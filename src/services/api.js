@@ -147,6 +147,8 @@ export const API = {
   publicTicketLookup: filters => apiRequest(`/public/ticket-lookup?${qs(filters)}`),
   publicVehicleLookup: plateNumber => apiRequest(`/public/vehicle-lookup?${qs({ plateNumber })}`),
   publicPlateSummary: plateNumber => apiRequest(`/public/plate-summary?${qs({ plateNumber })}`),
+  publicDisputeRequestCode: ticketNumber => apiRequest('/public/dispute/verification/request', { method: 'POST', body: JSON.stringify({ ticketNumber }) }),
+  publicDisputeVerifyCode: data => apiRequest('/public/dispute/verification/verify', { method: 'POST', body: JSON.stringify(data) }),
   publicDispute: data => apiRequest('/public/dispute', { method: 'POST', body: JSON.stringify(data) }),
   publicContact: data => apiRequest('/public/contact', { method: 'POST', body: JSON.stringify(data) }),
 
