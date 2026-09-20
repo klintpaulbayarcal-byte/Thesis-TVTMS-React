@@ -42,7 +42,7 @@ if ($route['handler'] === 'health') {
             'status' => 'healthy',
             'database' => 'connected',
             'databaseClient' => 'supabase-postgresql',
-            'smtp' => !empty(app_config()['smtp']['enabled']) ? 'configured' : 'not_configured',
+            'smtp' => smtp_configuration_status(app_config()['smtp']??[])==='configured' ? 'configured' : 'not_configured',
             'deployment' => !empty(app_config()['development']) ? 'development' : 'production',
             'runtime' => 'php',
             'capabilities' => ['react-static-frontend','supabase-postgresql','ticket-permanent-delete','ticket-mark-unpaid','payment-state-audit'],

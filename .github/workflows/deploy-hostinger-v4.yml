@@ -22,6 +22,13 @@ jobs:
       FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
       TVTMS_TOKEN_SECRET: ${{ secrets.TVTMS_TOKEN_SECRET }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_SECURE: ${{ secrets.SMTP_SECURE }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      SMTP_FROM_EMAIL: ${{ secrets.SMTP_FROM_EMAIL }}
+      SMTP_FROM_NAME: ${{ secrets.SMTP_FROM_NAME }}
     steps:
       - name: Check out approved sync-v4 source
         uses: actions/checkout@v4
@@ -36,6 +43,16 @@ jobs:
           test -n "$SUPABASE_SECRET_KEY" || { echo 'SUPABASE_SECRET_KEY secret is missing'; exit 1; }
           test -n "$TVTMS_TOKEN_SECRET" || { echo 'TVTMS_TOKEN_SECRET secret is missing'; exit 1; }
           test "${#TVTMS_TOKEN_SECRET}" -ge 32 || { echo 'TVTMS_TOKEN_SECRET must contain at least 32 characters'; exit 1; }
+          test -n "$SMTP_HOST" || { echo 'SMTP_HOST secret is missing'; exit 1; }
+          test -n "$SMTP_PORT" || { echo 'SMTP_PORT secret is missing'; exit 1; }
+          test -n "$SMTP_SECURE" || { echo 'SMTP_SECURE secret is missing'; exit 1; }
+          test -n "$SMTP_USERNAME" || { echo 'SMTP_USERNAME secret is missing'; exit 1; }
+          test -n "$SMTP_PASSWORD" || { echo 'SMTP_PASSWORD secret is missing'; exit 1; }
+          test -n "$SMTP_FROM_EMAIL" || { echo 'SMTP_FROM_EMAIL secret is missing'; exit 1; }
+          test -n "$SMTP_FROM_NAME" || { echo 'SMTP_FROM_NAME secret is missing'; exit 1; }
+          [[ "$SMTP_PORT" =~ ^[0-9]+$ ]] && test "$SMTP_PORT" -ge 1 && test "$SMTP_PORT" -le 65535 || { echo 'SMTP_PORT secret is invalid'; exit 1; }
+          [[ "$SMTP_SECURE" = 'tls' || "$SMTP_SECURE" = 'ssl' ]] || { echo 'SMTP_SECURE must be tls or ssl'; exit 1; }
+          [[ "$SMTP_FROM_EMAIL" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || { echo 'SMTP_FROM_EMAIL secret is invalid'; exit 1; }
           test "$FTP_SERVER" = '145.223.108.219' || { echo 'FTP_SERVER differs from the approved screenshot; stopping'; exit 1; }
           test "$FTP_USERNAME" = 'u948876618.trafficviolation' || { echo 'FTP_USERNAME differs from the approved subdomain FTP account; stopping'; exit 1; }
           echo 'Required secret names are populated and destination matches the approved FTP account.'
@@ -97,40 +114,7 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          php <<'PHP'
-          <?php
-          $supabaseSecret = trim((string) getenv('SUPABASE_SECRET_KEY'));
-          $tokenSecret = trim((string) getenv('TVTMS_TOKEN_SECRET'));
-          if ($supabaseSecret === '' || strlen($tokenSecret) < 32) {
-              fwrite(STDERR, "Production API secrets are missing or invalid.\n");
-              exit(1);
-          }
-          $config = [
-              'supabase_url' => 'https://cwrhxvrmnfmzuxotsjrw.supabase.co',
-              'supabase_secret_key' => $supabaseSecret,
-              'token_secret' => $tokenSecret,
-              'token_ttl_seconds' => 28800,
-              'app_public_url' => 'https://trafficviolation.dcsbisu.com',
-              'timezone' => 'Asia/Manila',
-              'development' => false,
-              'smtp' => [
-                  'enabled' => false,
-                  'host' => '',
-                  'port' => 587,
-                  'secure' => 'tls',
-                  'username' => '',
-                  'password' => '',
-                  'from_email' => '',
-                  'from_name' => 'TVTMS',
-              ],
-          ];
-          $target = 'deploy/api/config/config.local.php';
-          if (file_put_contents($target, "<?php\nreturn " . var_export($config, true) . ";\n") === false) {
-              fwrite(STDERR, "Unable to create the private production API config.\n");
-              exit(1);
-          }
-          PHP
-          chmod 600 deploy/api/config/config.local.php
+          php scripts/render-production-config.php deploy/api/config/config.local.php
           php -l deploy/api/config/config.local.php
           echo 'Private production API config created without printing secret values.'
 
