@@ -36,6 +36,8 @@ def test_hostinger_deploy_bootstraps_over_ca_verified_ip_ftps():
     assert 'cls -1 /api/config/config.local.php' not in workflow
     assert 'supabase_secret_key: ${{ secrets.supabase_secret_key }}' in workflow
     assert 'tvtms_token_secret: ${{ secrets.tvtms_token_secret }}' in workflow
+    assert 'export tvtms_python="$(python -c' in workflow
+    assert 'export tvtms_php="$(command -v php)"' in workflow
     assert 'deploy/api/config/config.local.php' in workflow
     assert '--exclude-glob uploads/' in workflow
     assert '--exclude-glob config.local.php' not in workflow

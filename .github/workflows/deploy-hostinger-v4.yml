@@ -79,8 +79,8 @@ jobs:
           set -euo pipefail
           npm ci
           python -m pip install pytest
-          echo "TVTMS_PYTHON=$(python -c 'import sys; print(sys.executable)')" >> "$GITHUB_ENV"
-          echo "TVTMS_PHP=$(command -v php)" >> "$GITHUB_ENV"
+          export TVTMS_PYTHON="$(python -c 'import sys; print(sys.executable)')"
+          export TVTMS_PHP="$(command -v php)"
           npm run verify:jsx
           find api -type f -name '*.php' -print0 | xargs -0 -r -n1 php -l
           npm run build:hostinger
