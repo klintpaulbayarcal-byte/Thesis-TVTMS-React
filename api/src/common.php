@@ -21,6 +21,7 @@ require_once __DIR__ . '/mail.php';
 
 require_once __DIR__ . '/supabase.php';
 require_once __DIR__ . '/ticket_email.php';
+require_once __DIR__ . '/dispute_verification.php';
 
 function json_input(): array
 {
@@ -115,12 +116,21 @@ function rpc_domain_error(mixed $result): ?array
 {
     if(!is_array($result))return null;
     if(isset($result['error'])&&is_array($result['error'])) return $result['error'];
-    if(isset($result['errorCode'])) return ['message'=>$result['message']??'Operation rejected.','statusCode'=>(int)($result['statusCode']??400),'errorCode'=>$result['errorCode']];
+    if(isset($result['errorCode'])){
+        $error=['message'=>$result['message']??'Operation rejected.','statusCode'=>(int)($result['statusCode']??400),'errorCode'=>$result['errorCode']];
+        if(isset($result['retryAfter']))$error['retryAfter']=(int)$result['retryAfter'];
+        if(isset($result['attemptsRemaining']))$error['attemptsRemaining']=(int)$result['attemptsRemaining'];
+        return $error;
+    }
     return null;
 }
 function fail_domain(array $error): never
 {
-    fail((string)($error['message']??'Operation rejected.'),(int)($error['statusCode']??$error['status']??400),(string)($error['errorCode']??'DOMAIN_ERROR'));
+    $extra=[];
+    $retryAfter=(int)($error['retryAfter']??0);
+    if($retryAfter>0){header('Retry-After: '.(string)$retryAfter);$extra['retryAfter']=$retryAfter;}
+    if(isset($error['attemptsRemaining']))$extra['attemptsRemaining']=(int)$error['attemptsRemaining'];
+    fail((string)($error['message']??'Operation rejected.'),(int)($error['statusCode']??$error['status']??400),(string)($error['errorCode']??'DOMAIN_ERROR'),$extra);
 }
 
 function rate_limit_check(string $bucket,int $max,int $windowSeconds,?string $ip=null,?int $now=null,?string $directory=null): array

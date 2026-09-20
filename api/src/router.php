@@ -97,6 +97,8 @@ function api_routes(): array
         ['GET', '#^/api/public/ticket-lookup/?$#', 'public_ticket_lookup'],
         ['GET', '#^/api/public/vehicle-lookup/?$#', 'public_vehicle_lookup'],
         ['GET', '#^/api/public/plate-summary/?$#', 'public_plate_summary'],
+        ['POST', '#^/api/public/dispute/verification/request/?$#', 'public_dispute_verification_request'],
+        ['POST', '#^/api/public/dispute/verification/verify/?$#', 'public_dispute_verification_verify'],
         ['POST', '#^/api/public/dispute/?$#', 'public_dispute'],
         ['POST', '#^/api/public/contact/?$#', 'public_contact'],
     ];

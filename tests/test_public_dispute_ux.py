@@ -24,4 +24,5 @@ def test_dispute_submission_has_visible_validation_and_progress():
 def test_dispute_policy_is_not_weakened_by_ui_changes():
     source = (ROOT / 'api/src/handlers/public.php').read_text(encoding='utf-8')
     assert "The '.$deadline.'-day dispute period has ended." in source
-    assert 'TICKET_VERIFICATION_FAILED' in source
+    assert 'challengeToken' in source
+    assert 'tvtms_public_dispute_verified' in source

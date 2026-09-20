@@ -38,9 +38,16 @@ function public_plate_summary(array $params=[]): never
 function public_stats(array $params=[]): never{$r=supabase_rpc('tvtms_public_stats',[]);$stats=[];foreach((array)$r as $k=>$v)$stats[$k]=is_numeric($v)?(float)$v:$v;json_response(['success'=>true,'stats'=>$stats]);}
 function public_dispute(array $params=[]): never
 {
-    $b=json_input();$ticket=strtoupper(trim((string)($b['ticket_number']??$b['ticketNumber']??'')));$email=normalize_email($b['email']??'');$reason=clean_string($b['reason']??'',4000);if($ticket===''||strlen($ticket)>30||!filter_var($email,FILTER_VALIDATE_EMAIL)||strlen($email)>100||strlen($reason)<10)fail('A valid ticket number, owner email, and a reason of 10–4000 characters are required.',400,'VALIDATION_ERROR');
-    $verified=supabase_select('ticket_details',['ticket_number'=>'eq.'.$ticket,'owner_email'=>'eq.'.$email],['select'=>'id','limit'=>1]);if(!$verified)fail('The ticket number and owner email could not be verified.',404,'TICKET_VERIFICATION_FAILED');
-    $r=supabase_rpc('tvtms_public_dispute',['p_ticket'=>$ticket,'p_reason'=>$reason]);$err=rpc_domain_error($r);if($err)fail_domain($err);json_response(['success'=>true,'message'=>'Your dispute has been submitted for administrator review.','dispute_id'=>(int)($r['disputeId']??0)],201);
+    $b=json_input();
+    $ticket=dispute_ticket_number($b['ticket_number']??$b['ticketNumber']??'');
+    $token=trim((string)($b['challenge_token']??$b['challengeToken']??''));
+    $reason=clean_string($b['reason']??'',4000);
+    if($ticket===''||strlen($ticket)>30||!dispute_token_is_valid($token)||strlen($reason)<10){
+        fail('A valid ticket number, verified challenge, and a reason of 10–4000 characters are required.',400,'VALIDATION_ERROR');
+    }
+    $r=supabase_rpc('tvtms_public_dispute_verified',['p_ticket'=>$ticket,'p_challenge_hash'=>dispute_token_hash($token),'p_reason'=>$reason]);
+    $err=rpc_domain_error($r);if($err)fail_domain($err);
+    json_response(['success'=>true,'message'=>'Your dispute has been submitted for administrator review.','dispute_id'=>(int)($r['disputeId']??0)],201);
 }
 function public_violations(array $params=[]): never
 {
