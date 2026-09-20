@@ -6,7 +6,24 @@ function public_ticket_lookup(array $params=[]): never
     $plate=normalize_plate($_GET['plate_number']??$_GET['plateNumber']??$_GET['plate']??'');$ticket=strtoupper(trim((string)($_GET['ticket_number']??$_GET['ticketNumber']??$_GET['ticket']??'')));
     if($plate===''&&$ticket==='')fail('Plate number or ticket number is required.',400,'VALIDATION_ERROR');
     $rows=supabase_rpc('tvtms_public_lookup',['p_plate'=>$plate?:null,'p_ticket'=>$ticket?:null]);$tickets=is_array($rows)?$rows:[];
-    foreach($tickets as &$t){$deadline=(int)($t['dispute_deadline_days']??15);$age=(int)($t['dispute_age_days']??0);$open=(int)($t['has_open_dispute']??0)===1;$msg='';if(($t['status']??'')!=='unpaid')$msg='Only unpaid tickets can be disputed.';elseif($open)$msg='A dispute is already open for this ticket.';elseif($age>$deadline)$msg='The '.$deadline.'-day dispute period has ended.';$t['dispute_eligible']=$msg==='';$t['dispute_message']=$msg;$t['status']=$t['payment_status']??$t['status']??'unpaid';unset($t['id'],$t['dispute_age_days'],$t['dispute_deadline_days'],$t['has_open_dispute']);}unset($t);
+    $ids=[];
+    foreach($tickets as $row){$id=(int)($row['id']??0);if($id>0)$ids[$id]=$id;}
+    $emailsById=[];
+    if($ids){
+        $details=supabase_select('ticket_details',['id'=>'in.('.implode(',',array_values($ids)).')'],['select'=>'id,owner_email']);
+        foreach($details as $detail){$id=(int)($detail['id']??0);if($id>0)$emailsById[$id]=normalize_email($detail['owner_email']??'');}
+    }
+    foreach($tickets as &$t){
+        $id=(int)($t['id']??0);
+        $email=$emailsById[$id]??'';
+        $hasEmail=$email!==''&&filter_var($email,FILTER_VALIDATE_EMAIL)!==false;
+        $deadline=(int)($t['dispute_deadline_days']??15);$age=(int)($t['dispute_age_days']??0);$open=(int)($t['has_open_dispute']??0)===1;$msg='';if(($t['status']??'')!=='unpaid')$msg='Only unpaid tickets can be disputed.';elseif($open)$msg='A dispute is already open for this ticket.';elseif($age>$deadline)$msg='The '.$deadline.'-day dispute period has ended.';
+        $t['dispute_eligible']=$msg==='';$t['dispute_message']=$msg;$t['status']=$t['payment_status']??$t['status']??'unpaid';
+        $t['has_notification_email']=$hasEmail;
+        $t['notification_email_masked']=$hasEmail?mask_email($email):null;
+        unset($t['id'],$t['owner_email'],$t['dispute_age_days'],$t['dispute_deadline_days'],$t['has_open_dispute']);
+    }
+    unset($t);
     json_response(['success'=>true,'count'=>count($tickets),'tickets'=>$tickets]);
 }
 function public_vehicle_lookup(array $params=[]): never
