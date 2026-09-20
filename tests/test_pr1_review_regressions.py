@@ -57,6 +57,33 @@ def test_hostinger_deploy_bootstraps_over_ca_verified_ip_ftps():
     assert 'put ./deploy/api/config/.htaccess -o /api/config/.htaccess' in workflow
 
 
+def test_legacy_landing_redirect_precedes_static_files_and_removes_only_that_file():
+    """A stale deployed landing page must redirect without broad remote deletion."""
+    apache = read('.htaccess')
+    workflow = read('.github/workflows/deploy-hostinger-v4.yml')
+
+    redirect = 'rewriterule ^pages/landing\\.html$ / [r=301,l]'
+    assert redirect in apache
+    assert apache.index(redirect) < apache.index('rewritecond %{request_filename} -f')
+
+    active_delete_lines = [
+        line.strip()
+        for line in workflow.splitlines()
+        if 'rm -f ' in line and not line.lstrip().startswith('#')
+    ]
+    assert len(active_delete_lines) == 1
+    release_command = active_delete_lines[0]
+    assert 'rm -f /pages/landing.html' in release_command
+    assert 'rm -r' not in release_command
+    assert 'rm -rf' not in release_command
+    assert 'rmdir ' not in release_command
+    redirect_check = '- name: verify the exact legacy redirect before cleanup'
+    delete_step = '- name: remove only the obsolete deployed landing file'
+    assert redirect_check in workflow
+    assert delete_step in workflow
+    assert workflow.index(redirect_check) < workflow.index(delete_step)
+
+
 def test_plate_lookup_fix_uses_normalized_identity_and_persistent_sequence():
     sql = read('supabase/migrations/202609190002_plate_lookup_consistency.sql')
     assert 'create or replace function public.tvtms_catalog_vehicle_violations(p_id bigint)' in sql
