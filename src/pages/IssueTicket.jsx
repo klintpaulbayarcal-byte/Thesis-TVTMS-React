@@ -58,7 +58,17 @@ export default function IssueTicket(){
 
   const confirmSubmit=async()=>{
     setBusy(true);setNotice({type:'',text:''});
-    try{const response=await API.createTicket({...form,violation_id:Number(form.violation_id)});const ticket=response.ticket??response.data;setNotice({type:'success',text:`Ticket ${ticket?.ticket_number||''} issued successfully.`});if(ticket?.id)setTimeout(()=>navigate(`/tickets/${ticket.id}`),500);}
+    try{
+      const response=await API.createTicket({...form,violation_id:Number(form.violation_id)});
+      const ticket=response.ticket??response.data;
+      const notification=response.notification??{};
+      setReviewOpen(false);
+      setNotice({
+        type:notification.status==='accepted'||notification.status==='already_accepted'?'success':'info',
+        text:`Ticket ${ticket?.ticket_number||''} issued successfully. ${notification.message||'No email notification status was returned.'}`,
+      });
+      if(ticket?.id)setTimeout(()=>navigate(`/tickets/${ticket.id}`),2500);
+    }
     catch(error){setNotice({type:'error',text:error.message});}
     finally{setBusy(false);}
   };
