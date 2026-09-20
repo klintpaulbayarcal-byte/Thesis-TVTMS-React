@@ -101,6 +101,7 @@ function tickets_get_one(array $params): never
     $ticket['remarks']=$base[0]['remarks']??null;
     $enriched=ticket_enrich_payment_totals([$ticket]);
     $ticket=$enriched[0]??$ticket;
+    $ticket['notification']=ticket_notification_read($ticket);
     ok('Ticket fetched successfully',$ticket,['ticket'=>$ticket]);
 }
 
@@ -120,8 +121,20 @@ function tickets_create(array $params=[]): never
     $ticket=$r['ticket']??null;if(!is_array($ticket))fail('Ticket creation returned no record',500,'TICKET_CREATE_FAILED');
     $penalty=$r['penaltyInfo']??[];
     log_audit((int)$u['id'],'TICKET_CREATED','tickets',(int)($ticket['id']??0),['ticketNumber'=>$ticket['ticket_number']??null,'violationId'=>$vid,'plateNumber'=>$plate,'penaltyInfo'=>$penalty]);
-    if($email!=='')send_basic_email($email,'Traffic Violation Notice — '.($ticket['ticket_number']??'TVTMS'),'<p>A traffic violation ticket <strong>'.htmlspecialchars((string)($ticket['ticket_number']??''),ENT_QUOTES,'UTF-8').'</strong> was issued for plate <strong>'.htmlspecialchars($plate,ENT_QUOTES,'UTF-8').'</strong>.</p>');
-    ok('Ticket issued successfully',$ticket,['ticket'=>$ticket],201);
+    $notification=ticket_notification_attempt((int)$u['id'],$ticket);
+    ok('Ticket issued successfully',$ticket,['ticket'=>$ticket,'notification'=>$notification],201);
+}
+
+function tickets_retry_notification(array $params): never
+{
+    $u=require_role(['admin','apprehending_officer']);
+    $id=ticket_valid_id($params['id']??0);
+    $notification=ticket_notification_attempt((int)$u['id'],['id'=>$id]);
+    $statusCode=(int)($notification['statusCode']??0);
+    if($statusCode>=400){
+        fail((string)($notification['message']??'Notification retry was rejected.'),$statusCode,(string)($notification['errorCode']??'NOTIFICATION_RETRY_REJECTED'));
+    }
+    ok('Notification retry completed',$notification,['notification'=>$notification]);
 }
 
 function tickets_update_status(array $params): never

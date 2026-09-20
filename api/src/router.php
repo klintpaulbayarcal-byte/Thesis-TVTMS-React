@@ -33,6 +33,7 @@ function api_routes(): array
 
         ['GET', '#^/api/tickets/stats/?$#', 'tickets_stats'],
         ['GET', '#^/api/tickets/search/?$#', 'tickets_search'],
+        ['POST', '#^/api/tickets/(?P<id>\d+)/notification/retry/?$#', 'tickets_retry_notification'],
         ['PUT', '#^/api/tickets/(?P<id>\d+)/details/?$#', 'tickets_update_details'],
         ['PUT', '#^/api/tickets/(?P<id>\d+)/mark-unpaid/?$#', 'tickets_mark_unpaid'],
         ['DELETE', '#^/api/tickets/(?P<id>\d+)/permanent/?$#', 'tickets_permanent_delete'],
