@@ -22,6 +22,8 @@ jobs:
       FTP_SERVER: ${{ secrets.FTP_SERVER }}
       FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
       FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      TVTMS_TOKEN_SECRET: ${{ secrets.TVTMS_TOKEN_SECRET }}
     steps:
       - name: Check out approved sync-v4 source
         uses: actions/checkout@v4
@@ -33,27 +35,32 @@ jobs:
           test -n "$FTP_SERVER" || { echo 'FTP_SERVER secret is missing'; exit 1; }
           test -n "$FTP_USERNAME" || { echo 'FTP_USERNAME secret is missing'; exit 1; }
           test -n "$FTP_PASSWORD" || { echo 'FTP_PASSWORD secret is missing'; exit 1; }
+          test -n "$SUPABASE_SECRET_KEY" || { echo 'SUPABASE_SECRET_KEY secret is missing'; exit 1; }
+          test -n "$TVTMS_TOKEN_SECRET" || { echo 'TVTMS_TOKEN_SECRET secret is missing'; exit 1; }
+          test "${#TVTMS_TOKEN_SECRET}" -ge 32 || { echo 'TVTMS_TOKEN_SECRET must contain at least 32 characters'; exit 1; }
           test "$FTP_SERVER" = '145.223.108.219' || { echo 'FTP_SERVER differs from the approved screenshot; stopping'; exit 1; }
           test "$FTP_USERNAME" = 'u948876618.trafficviolation' || { echo 'FTP_USERNAME differs from the approved subdomain FTP account; stopping'; exit 1; }
-          echo 'FTP secret names are populated and destination matches the approved FTP account.'
+          echo 'Required secret names are populated and destination matches the approved FTP account.'
 
       - name: Install build/test dependencies and secure FTP client
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y -qq lftp php-cli >/dev/null
+          sudo apt-get install -y -qq lftp openssl php-cli >/dev/null
 
-      - name: Preflight remote subdomain root and server-only API config (NO WRITES)
+      - name: Preflight Hostinger certificate and remote subdomain root (NO WRITES)
         shell: bash
         run: |
           set -euo pipefail
-          # Only encrypted FTP; certificate validation must succeed. No plain FTP fallback.
-          options='set cmd:fail-exit yes; set ftp:ssl-force yes; set ftp:ssl-protect-data yes; set ssl:verify-certificate yes; set ftp:passive-mode yes; set net:timeout 15; set net:max-retries 1;'
-          lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER" -e "$options cls -1 /index.html; cls -1 /.htaccess; bye"
-          # Do not download/read or replace config.local.php; require it already exists.
-          lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER" -e "$options cls -1 /api/config/config.local.php; bye"
-          echo 'Remote root and existing private API configuration verified. No remote files changed.'
+          # Hostinger supplied an IP-only FTP endpoint, while its CA-issued certificate
+          # identifies *.hstgr.io. Verify the chain and Hostinger SAN before disabling
+          # only lftp's impossible IP-to-DNS-name comparison. Encryption stays mandatory.
+          certificate="$(timeout 20 openssl s_client -connect "$FTP_SERVER:21" -starttls ftp -verify_return_error </dev/null 2>/tmp/tvtms-ftps-certificate.log | openssl x509 -noout -subject -ext subjectAltName)"
+          grep -Fq 'DNS:*.hstgr.io' <<<"$certificate" || { echo 'FTPS certificate is not issued for Hostinger (*.hstgr.io); stopping'; exit 1; }
+          options='set cmd:fail-exit yes; set ftp:ssl-force yes; set ftp:ssl-protect-data yes; set ssl:verify-certificate yes; set ssl:check-hostname no; set ftp:passive-mode yes; set net:timeout 15; set net:max-retries 1;'
+          lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER" -e "$options cls -1 /; bye"
+          echo 'CA-verified Hostinger FTPS and account-root login verified. No remote files changed.'
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -87,14 +94,56 @@ jobs:
           test ! -e deploy/.env
           test ! -e deploy/.env.local
 
-      - name: Upload verified build only (NO DELETE, private config/uploads excluded)
+      - name: Create private production API config from GitHub Secrets
         shell: bash
         run: |
           set -euo pipefail
-          options='set cmd:fail-exit yes; set ftp:ssl-force yes; set ftp:ssl-protect-data yes; set ssl:verify-certificate yes; set ftp:passive-mode yes; set net:timeout 20; set net:max-retries 2;'
+          umask 077
+          php <<'PHP'
+          <?php
+          $supabaseSecret = trim((string) getenv('SUPABASE_SECRET_KEY'));
+          $tokenSecret = trim((string) getenv('TVTMS_TOKEN_SECRET'));
+          if ($supabaseSecret === '' || strlen($tokenSecret) < 32) {
+              fwrite(STDERR, "Production API secrets are missing or invalid.\n");
+              exit(1);
+          }
+          $config = [
+              'supabase_url' => 'https://cwrhxvrmnfmzuxotsjrw.supabase.co',
+              'supabase_secret_key' => $supabaseSecret,
+              'token_secret' => $tokenSecret,
+              'token_ttl_seconds' => 28800,
+              'app_public_url' => 'https://trafficviolation.dcsbisu.com',
+              'timezone' => 'Asia/Manila',
+              'development' => false,
+              'smtp' => [
+                  'enabled' => false,
+                  'host' => '',
+                  'port' => 587,
+                  'secure' => 'tls',
+                  'username' => '',
+                  'password' => '',
+                  'from_email' => '',
+                  'from_name' => 'TVTMS',
+              ],
+          ];
+          $target = 'deploy/api/config/config.local.php';
+          if (file_put_contents($target, "<?php\nreturn " . var_export($config, true) . ";\n") === false) {
+              fwrite(STDERR, "Unable to create the private production API config.\n");
+              exit(1);
+          }
+          PHP
+          chmod 600 deploy/api/config/config.local.php
+          php -l deploy/api/config/config.local.php
+          echo 'Private production API config created without printing secret values.'
+
+      - name: Upload verified build and private config (NO DELETE, uploads excluded)
+        shell: bash
+        run: |
+          set -euo pipefail
+          options='set cmd:fail-exit yes; set ftp:ssl-force yes; set ftp:ssl-protect-data yes; set ssl:verify-certificate yes; set ssl:check-hostname no; set ftp:passive-mode yes; set net:timeout 20; set net:max-retries 2;'
           # lftp mirror -R does not delete remote files without --delete. --all transfers .htaccess.
-          # The packaging step already excludes uploads and config.local.php.
-          lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER" -e "$options mirror -R --all --verbose --no-perms --parallel=2 --exclude-glob uploads/ --exclude-glob config.local.php ./deploy/ /; bye"
+          # Runtime uploads are never packaged or changed by this release.
+          lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER" -e "$options mirror -R --all --verbose --no-perms --parallel=2 --exclude-glob uploads/ ./deploy/ /; bye"
           echo 'FTP upload finished; verifying live site next.'
 
       - name: Check production website and API health
