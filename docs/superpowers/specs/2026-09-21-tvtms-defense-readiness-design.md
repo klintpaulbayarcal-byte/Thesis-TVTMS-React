@@ -1,0 +1,55 @@
+# TVTMS defense-readiness investigation and controlled improvement design
+
+Date: 2026-09-21
+Status: Proposed for user review — **not permission to implement, alter production data, or deploy**.
+Baseline: `sync-v4` commit `16780da4c90be56d9bf6541dcee58611d5de15e4`. Dedicated branch `feature/tvtms-defense-readiness` starts at that commit. Do not merge PR #1 or change `main`. Preserve user-owned untracked documentation and local files.
+
+## 1. Purpose, scope, and success criteria
+
+The user wants ChatGPT (not Codex) to handle the five approved phases of TVTMS quality work after review of three slowed-down system test recordings: establish an accurate baseline, investigate business correctness, make minimal UI corrections, run broad regression tests, and prepare a controlled release for separate approval. Existing frontend is React/Vite; backend is PHP; database is Supabase PostgreSQL; production deploy triggers automatically from a push to `sync-v4` via a guarded Hostinger Actions workflow. Preserve original aesthetics, existing functional modules, data, secrets, authorized roles, and workflow semantics. Never conflate automated tests, SMTP acceptance, inbox receipt, or visually demonstrated behavior.
+
+Success requires evidence-backed findings with reproduction steps, only warranted fixes, tests covering success and failure, accessible responsive presentation, no changed payment history or production records, and a release report showing changed files, regression results, unresolved risks, deployment steps, and rollback. An isolated feature branch is not the production environment. No blanket '100% complete' claim.
+
+## 2. Evidence and baseline findings (not all bugs confirmed)
+
+Recordings show Public, Officer, and Administrator screens. A cross-violation discrepancy was observed in the ticket form: previous Counterflow ticket visible while selecting Defective Lights displayed penalty level 2. GitHub source confirms the preview is based on **same normalized plate + exact selected violation ID**: `violations_penalty_preview` calls `tvtms_catalog_prior_offenses`; ticket creation SQL calculates the same identity under plate advisory lock and persists `penalty_amount_at_issue`. Production read-only queries on 2026-09-21 found 15 catalog violations, **zero active escalation rules**, 1 Counterflow ticket, and **zero Defective Lights tickets**; no actual increased penalty is established. `IssueTicket.jsx` debounces preview calls but does not cancel/identify responses, so an old response can overwrite a new selection. The form also reads fallback penalty when preview is missing, and it autosupplies historical owner email on plate lookup; these merit privacy/correctness tests rather than unapproved policy changes.
+
+GPS currently writes six-decimal latitude and longitude into the single `tickets.location` text field via `IssueTicket.jsx`. `tvtms_report_hotspots` groups that field by exact trimmed text; the admin dashboard displays those raw labels. Read-only production query found 8 coordinate-format locations. Existing `public.violation_penalty_rules` has zero active rules: do **not** invent escalating fine amounts or enforcement policy. Avoid false geocoding or silently rewriting old records.
+
+`AnalyticsDashboard.jsx` initializes KPI payloads to empty objects and defaults absent values to zero while asynchronous requests are still pending; `OfficerDashboard.jsx` and `AdminDashboard.jsx` do likewise. Admin uses `Promise.allSettled` and an error predicate that may obscure partial failure. Payment enrichment in `tickets.php` already derives `payment_status='partially_paid'` from non-voided amounts, but `Payments.jsx` renders the raw ticket `status` field, explaining an unpaid badge alongside nonzero paid and remaining balances. Read-only production query found one partially paid ticket. A QA marker scan (not authoritative proof of all test data) found 9 contact subjects, 1 dispute reason, and 4 ticket remarks containing QA/TEST. Preserve all these records until the user explicitly authorizes any cleanup.
+
+The preceding Contact changes were deployed with GitHub Actions success on 2026-09-21; the recordings do not prove every email reached the intended inbox. The evidence does not establish a broken payment write, penalty amount, authorization, or GPS accuracy. No developer should claim a video demonstrates an API or database operation it does not show.
+
+## 3. Work decomposition and dependencies
+
+### A. Read-only baseline and reproducible defect matrix (first)
+
+Confirm current GitHub branch/deployment commit and workflow status, exact schema/RPC functions, existing tests, and any recent changes. Translate each recording observation into a case with timestamp, steps, expected behavior, observed behavior, confidence (`confirmed`, `likely`, or `unverified`), and regression test. Reproduce locally or in isolated mocks. No real production ticket/payment, actual SMTP send, database writes, or destructive operation. Save a known-good commit and rollback instructions. If live test credentials or privileges are absent, label that step unverified instead of improvising access.
+
+### B. Ticket issuance, repeat-offender calculation, and privacy
+
+Inspect plate normalization, exact violation ID, current penalty preview request lifecycle, historical count semantics, base/escalation rule lookup, issuance transaction, and persisted amounts. Prevent out-of-order/stale preview responses. While preview is pending or out of date, never imply an exact guaranteed penalty; actual saved backend value remains authoritative. On plate change reset prior history and prevent old lookup results replacing the new plate. Keep plate-based history distinct from proof of identical owner/driver; require officer confirmation of any historical recipient email before sending a ticket notification. Do not change fine policy or add rules. Test same plate/different violation, same plate/same violation, cancelled ticket, rapid switching, stale responses, concurrent issuance where isolatable, no email, owner change, and frontend-vs-saved penalty.
+
+### C. Location capture, dashboard reporting, and legacy data
+
+Maintain a human-readable apprehension place and optional coordinates distinctly at the interface boundary. Choose a backward-compatible, schema-preserving solution if possible; if persistence needs a new optional column, stop for separate migration design/review and never apply without explicit database approval. Existing coordinate-only locations must remain intact and should be rendered as coordinates with clear labeling rather than invented place names; do not geocode or guess a barangay. Normalize display grouping only when geographic identity is actually known. Distinguish 'recorded citations by area' from statistical 'risk' (no invented risk metric); make no geographical inference unsupported by ticket data. Test manual location, GPS success/denied/timeouts, old coordinate records, blank location, chart labels and totals, and user role visibility.
+
+### D. Loading states, partial payments, and minimal UI polish
+
+Add explicit initial/loading/error/empty states for Officer/Admin/Analytics data. Preserve last successful results during refresh and report partial failures rather than silently presenting zero as verified. Use the existing derived `payment_status` or a clearly labeled 'Partially Paid' visual on payment screens; do not overwrite underlying `tickets.status` or payment entries. Improve cramped notification timestamp/link layout and verify the sticky Contact heading after navigation; adjust hero overlay only if a visual check shows readability improvement. Preserve existing design, icons, colors, layout, screenshots, and responsive behavior. Test paid/unpaid/cancelled/partial, loading, failure, desktop and mobile; never let UI label affect payment authorization.
+
+### E. Full regression and release preparation
+
+Run npm tests, JSX/import verification, PHP lint, production package build, secret-exclusion checks, branch diff check and targeted tests. Exercise Public lookup/privacy and Contact, Officer issuance/history, Administrator payments/disputes/reports/audit/users/settings, security-role boundaries, OTP/email failure states, evidence, QR, export, and network disruptions with mocked or isolated data; distinguish browser manual and real-integration results. Only after all tests and review, produce a release report with exact commit/file list, possible breaking changes, unresolved issues, backup/rollback, and any extra credentials or data setup. Request separate approval before applying any migration, modifying Supabase production data, sending a real email, pushing `sync-v4`, merging any PR, or deploying to Hostinger.
+
+## 4. Engineering implementation boundaries
+
+Use the existing repository and existing feature branch. Do not create a duplicate checkout or overwrite local untracked files. Keep changes granular and independently testable; use TDD with a failing regression where possible. Avoid new libraries unless required. Do not introduce anonymous access to user data, expose contact emails/secrets, or change official violation fines. Existing production email and OTP functionality must remain intact. If a proposed correction requires a revised interface, policy decision, or new database subsystem, escalate that component for further approval before writing code. There must be no behind-the-scenes production changes.
+
+## 5. Verification and release gates
+
+Evidence order: reproduce -> write failing test -> smallest fix -> passing targeted test -> complete suite/build/lint -> reviewer checks behavior -> present release report. Explicitly record `PASS`, `FAIL`, `NOT VERIFIED`, or `NOT APPLICABLE` per workflow, supported by logs or screenshots rather than assumptions. Database evidence must use read-only queries unless later authorization explicitly permits otherwise. For SMTP, differentiate accepted by SMTP from delivered to inbox. For reports, compare chart values with an independent read-only aggregate without disclosing user personal data. If checks fail, do not deploy; provide a rollback or repair plan.
+
+## 6. Decisions and unresolved details
+
+Confirmed scope: the user approved the five-phase *work scope* and wants ChatGPT to implement rather than supplying another long Codex prompt. This written design still requires user review. After approval, a separate implementation plan and execution review is required. Production/deployment/migrations require separate explicit approval. Open questions to resolve during implementation planning: whether to keep coordinate-only data visually separate without schema changes, whether a verified location-name mapping exists, and which test environment can support full end-to-end email and payment tests. Defaults: avoid DB changes, avoid invented location labels, use mocks/local testing, mark missing credentials as unverified. User's official fine policy should not be inferred from screenshots or synthetic database records.
