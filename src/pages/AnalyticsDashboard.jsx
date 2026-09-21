@@ -21,21 +21,40 @@ export default function AnalyticsDashboard(){
   const [period,setPeriod]=useState('7');
   const [error,setError]=useState('');
   const [loading,setLoading]=useState(false);
+  const [loaded,setLoaded]=useState(false);
+  const [available,setAvailable]=useState({collections:false,payment:false,tickets:false,disputes:false,monthly:false});
   const [updatedAt,setUpdatedAt]=useState('');
 
   const load=useCallback(async()=>{
     setLoading(true); setError('');
     try{
       const range=rangeFor(period);
-      const [c,p,t,d,m]=await Promise.all([
+      const results=await Promise.allSettled([
         API.report('analytics/collections',range),
         API.report('analytics/payment-status',range),
         API.report('analytics/tickets-summary',range),
         API.report('analytics/dispute-rate',range),
         API.report('analytics/monthly-revenue')
       ]);
-      setData({collections:c.data||{},payment:p.data||{},tickets:t.data||{},disputes:d.data||{},monthly:m.data||[]});
-      setUpdatedAt(new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}));
+      const [c,p,t,d,m]=results;
+      const successes=results.filter(result=>result.status==='fulfilled');
+      setData(current=>({
+        collections:c.status==='fulfilled'?c.value.data||{}:current.collections,
+        payment:p.status==='fulfilled'?p.value.data||{}:current.payment,
+        tickets:t.status==='fulfilled'?t.value.data||{}:current.tickets,
+        disputes:d.status==='fulfilled'?d.value.data||{}:current.disputes,
+        monthly:m.status==='fulfilled'?m.value.data||[]:current.monthly,
+      }));
+      setAvailable(current=>({
+        collections:current.collections||c.status==='fulfilled',
+        payment:current.payment||p.status==='fulfilled',
+        tickets:current.tickets||t.status==='fulfilled',
+        disputes:current.disputes||d.status==='fulfilled',
+        monthly:current.monthly||m.status==='fulfilled',
+      }));
+      if(successes.length){setLoaded(true);setUpdatedAt(new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}));}
+      const failed=results.filter(result=>result.status==='rejected');
+      if(failed.length)setError(failed.length===results.length?'Analytics could not be loaded. Existing figures, if any, remain from the last successful refresh.':`Some analytics could not be refreshed: ${failed.map(result=>result.reason?.message||'Request failed').join('; ')}. Available figures are from the last successful response for each section.`);
     }catch(e){setError(e.message);}finally{setLoading(false);}
   },[period]);
 
@@ -52,7 +71,7 @@ export default function AnalyticsDashboard(){
   ],[breakdown]);
 
   const exportCsv=()=>{
-    const rows=[['Metric','Value'],['Total Collections',data.collections.totalAmount||0],['Outstanding Balance',data.payment.unpaidTotal||0],['Dispute Resolution Rate',data.disputes.resolutionRate||0],['Total Tickets Issued',data.tickets.totalIssued||0]];
+    const rows=[['Metric','Value'],['Total Collections',available.collections?data.collections.totalAmount??0:'Unavailable'],['Outstanding Balance',available.payment?data.payment.unpaidTotal??0:'Unavailable'],['Dispute Resolution Rate',available.disputes?data.disputes.resolutionRate??0:'Unavailable'],['Total Tickets Issued',available.tickets?data.tickets.totalIssued??0:'Unavailable']];
     const blob=new Blob([rows.map(r=>r.join(',')).join('\n')],{type:'text/csv;charset=utf-8'});
     const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='tvtms-analytics.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),5000);
   };
@@ -64,24 +83,27 @@ export default function AnalyticsDashboard(){
     </section>
 
     <Notice type="error">{error}</Notice>
-
+    {!loaded&&loading?<section className="card" role="status">Loading analytics…</section>:null}
+    {!loaded&&!loading?<section className="card" role="status">Analytics unavailable. No unverified zero totals are displayed.</section>:null}
+    {loaded&&<>
     <section className="export-section card">
       <div className="card-header"><div><h3 className="card-title">Export Analytics</h3><p>Download or print the current operational summary.</p></div></div>
       <div className="export-buttons"><button className="btn-export" onClick={exportCsv}><Icon name="report" size={14}/> Export CSV</button><button className="btn-export pdf" onClick={()=>window.print()}><Icon name="report" size={14}/> Export to PDF</button><button className="btn-export" onClick={()=>window.print()}><Icon name="report" size={14}/> Print Report</button></div>
     </section>
 
     <section className="kpi-metrics">
-      <article className="kpi-card collections"><div className="kpi-label">Total Collections</div><div className="kpi-value">{money(data.collections.totalAmount||0)}</div><div className="kpi-subtitle">{data.collections.paymentCount??0} payments processed</div></article>
-      <article className="kpi-card unpaid"><div className="kpi-label">Outstanding Balance</div><div className="kpi-value">{money(data.payment.unpaidTotal||0)}</div><div className="kpi-subtitle">{data.payment.unpaidCount??breakdown.unpaid??0} unpaid tickets</div></article>
-      <article className="kpi-card disputes"><div className="kpi-label">Dispute Resolution Rate</div><div className="kpi-value">{data.disputes.resolutionRate??0}%</div><div className="kpi-subtitle">{data.disputes.resolvedCount??0} disputes resolved</div></article>
-      <article className="kpi-card"><div className="kpi-label">Total Tickets Issued</div><div className="kpi-value">{data.tickets.totalIssued??0}</div><div className="kpi-subtitle">{data.tickets.pendingPayment??breakdown.unpaid??0} pending payment</div></article>
+      <article className="kpi-card collections"><div className="kpi-label">Total Collections</div><div className="kpi-value">{available.collections?money(data.collections.totalAmount||0):'—'}</div><div className="kpi-subtitle">{available.collections?`${data.collections.paymentCount??0} payments processed`:'Data unavailable'}</div></article>
+      <article className="kpi-card unpaid"><div className="kpi-label">Outstanding Balance</div><div className="kpi-value">{available.payment?money(data.payment.unpaidTotal||0):'—'}</div><div className="kpi-subtitle">{available.payment?`${data.payment.unpaidCount??breakdown.unpaid??0} unpaid tickets`:'Data unavailable'}</div></article>
+      <article className="kpi-card disputes"><div className="kpi-label">Dispute Resolution Rate</div><div className="kpi-value">{available.disputes?`${data.disputes.resolutionRate??0}%`:'—'}</div><div className="kpi-subtitle">{available.disputes?`${data.disputes.resolvedCount??0} disputes resolved`:'Data unavailable'}</div></article>
+      <article className="kpi-card"><div className="kpi-label">Total Tickets Issued</div><div className="kpi-value">{available.tickets?data.tickets.totalIssued??0:'—'}</div><div className="kpi-subtitle">{available.tickets?`${data.tickets.pendingPayment??breakdown.unpaid??0} pending payment`:'Data unavailable'}</div></article>
     </section>
 
     <section className="charts-grid">
-      <article className="chart-container"><h2 className="chart-title"><Icon name="payment" size={18}/> Daily Collections Trend</h2><div className="chart-canvas-wrapper"><MetricBars rows={daily.map(r=>({label:r.collection_date||r.date||'Date',value:Number(r.total_collected??r.amount??r.totalAmount??0)}))}/></div></article>
-      <article className="chart-container"><h2 className="chart-title"><Icon name="analytics" size={18}/> Payment Status Distribution</h2><div className="chart-canvas-wrapper"><MetricBars rows={paymentRows}/></div></article>
-      <article className="chart-container"><h2 className="chart-title"><Icon name="alert" size={18}/> Top Violations</h2><div className="chart-canvas-wrapper"><MetricBars rows={top.map(r=>({label:r.violation_name||r.label||r.violation_code||'Violation',value:Number(r.count||r.total||0)}))}/></div></article>
-      <article className="chart-container"><h2 className="chart-title"><Icon name="payment" size={18}/> Monthly Revenue</h2><div className="chart-canvas-wrapper"><MetricBars rows={(data.monthly||[]).map(r=>({label:r.month,value:Number(r.totalAmount||r.total_amount||0)}))}/></div></article>
+      <article className="chart-container"><h2 className="chart-title"><Icon name="payment" size={18}/> Daily Collections Trend</h2><div className="chart-canvas-wrapper">{available.collections?<MetricBars rows={daily.map(r=>({label:r.collection_date||r.date||'Date',value:Number(r.total_collected??r.amount??r.totalAmount??0)}))}/>:<p>Data unavailable.</p>}</div></article>
+      <article className="chart-container"><h2 className="chart-title"><Icon name="analytics" size={18}/> Payment Status Distribution</h2><div className="chart-canvas-wrapper">{available.payment?<MetricBars rows={paymentRows}/>:<p>Data unavailable.</p>}</div></article>
+      <article className="chart-container"><h2 className="chart-title"><Icon name="alert" size={18}/> Top Violations</h2><div className="chart-canvas-wrapper">{available.tickets?<MetricBars rows={top.map(r=>({label:r.violation_name||r.label||r.violation_code||'Violation',value:Number(r.count||r.total||0)}))}/>:<p>Data unavailable.</p>}</div></article>
+      <article className="chart-container"><h2 className="chart-title"><Icon name="payment" size={18}/> Monthly Revenue</h2><div className="chart-canvas-wrapper">{available.monthly?<MetricBars rows={(data.monthly||[]).map(r=>({label:r.month,value:Number(r.totalAmount||r.total_amount||0)}))}/>:<p>Data unavailable.</p>}</div></article>
     </section>
+    </>}
   </div>;
 }
