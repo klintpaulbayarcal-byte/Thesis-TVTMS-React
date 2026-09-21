@@ -93,7 +93,7 @@ export const API = {
   activeViolations: () => apiRequest('/violations/active'),
   violation: id => apiRequest(`/violations/${id}`),
   createViolation: data => apiRequest('/violations', { method: 'POST', body: JSON.stringify(data) }),
-  updateViolation: (id, data) => apiRequest('/violations', { method: 'POST', body: JSON.stringify(data) }),
+  updateViolation: (id, data) => apiRequest(`/violations/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteViolation: id => apiRequest(`/violations/${id}`, { method: 'DELETE' }),
   penaltyPreview: (id, plateNumber) => apiRequest(`/violations/${id}/penalty-preview?${qs({ plateNumber })}`),
 
