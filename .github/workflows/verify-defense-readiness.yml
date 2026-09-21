@@ -1,0 +1,46 @@
+name: Verify TVTMS defense-readiness branch (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - feature/tvtms-defense-readiness
+
+permissions:
+  contents: read
+
+jobs:
+  test-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install locked dependencies
+        run: |
+          npm ci
+          python -m pip install pytest
+          echo "TVTMS_PYTHON=$(command -v python)" >> "$GITHUB_ENV"
+          echo "TVTMS_PHP=$(command -v php)" >> "$GITHUB_ENV"
+      - name: Check syntax and PHP version
+        run: |
+          set -euo pipefail
+          php -r 'exit(PHP_VERSION_ID >= 80100 ? 0 : 1);'
+          find api -type f -name '*.php' -print0 | xargs -0 -r -n1 php -l
+          npm run verify:jsx
+      - name: Execute complete regression suite
+        run: npm test
+      - name: Build production-style package without uploading
+        run: |
+          npm run build:hostinger
+          test -f deploy/index.html
+          test -f deploy/api/index.php
+          test ! -e deploy/api/config/config.local.php
+          test ! -e deploy/uploads
+          test ! -e deploy/.env
+          test ! -e deploy/.env.local
