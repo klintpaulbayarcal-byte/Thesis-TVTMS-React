@@ -1,0 +1,13 @@
+/* Keep fragment-target headings clear of the landing page's sticky navigation.
+   Desktop navigation is at least 74px; mobile navigation is at least 66px. */
+.legacy-landing #faq,
+.legacy-landing #contact {
+  scroll-margin-top: 96px;
+}
+
+@media (max-width: 650px) {
+  .legacy-landing #faq,
+  .legacy-landing #contact {
+    scroll-margin-top: 86px;
+  }
+}
