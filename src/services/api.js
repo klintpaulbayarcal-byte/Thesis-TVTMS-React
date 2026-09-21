@@ -84,8 +84,8 @@ export const API = {
   updateUser: (id, data) => apiRequest(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteUser: id => apiRequest(`/users/${id}`, { method: 'DELETE' }),
   unlockUser: id => apiRequest(`/users/${id}/unlock`, { method: 'POST' }),
-  updateMe: data => apiRequest('/users/me', { method: 'PUT', body: JSON.stringify(data) }),
-  changePassword: data => apiRequest('/users/change-password', { method: 'POST', body: JSON.stringify(data) }),
+  updateMe: data => apiRequest('/users/me', { method: 'PUT' , body: JSON.stringify(data) }),
+  changePassword: data => apiRequest('/users/change-password', { method: 'PUT', body: JSON.stringify(data) }),
   auditLogs: (limit = 200) => apiRequest(`/users/audit-logs?limit=${encodeURIComponent(limit)}`),
   clearTestAuditLogs: () => apiRequest('/users/audit-logs/clear', { method: 'DELETE' }),
 
@@ -150,7 +150,15 @@ export const API = {
   publicDisputeRequestCode: ticketNumber => apiRequest('/public/dispute/verification/request', { method: 'POST', body: JSON.stringify({ ticketNumber }) }),
   publicDisputeVerifyCode: data => apiRequest('/public/dispute/verification/verify', { method: 'POST', body: JSON.stringify(data) }),
   publicDispute: data => apiRequest('/public/dispute', { method: 'POST', body: JSON.stringify(data) }),
-  publicContact: data => apiRequest('/public/contact', { method: 'POST', body: JSON.stringify(data) }),
+  publicContact: async data => {
+    const result = await apiRequest('/public/contact', { method: 'POST', body: JSON.stringify(data) });
+    // Saving was successful, so do not automatically retry a failed email and duplicate the message.
+    if (result?.contact_id && result?.email_status &&
+        (result.email_status.administrator !== 'accepted' || result.email_status.confirmation !== 'accepted')) {
+      throw new ApiError(result.message || 'Your message was saved, but email delivery could not be confirmed. Please do not resubmit.', 201, 'CONTACT_SAVED_EMAIL_INCOMPLETE', result);
+    }
+    return result;
+  },
 
   report: (name, filters = {}) => apiRequest(`/reports/${name}${qs(filters) ? `?${qs(filters)}` : ''}`),
   reportPdf: filters => apiBlobRequest(`/reports/export/pdf${qs(filters) ? `?${qs(filters)}` : ''}`),
