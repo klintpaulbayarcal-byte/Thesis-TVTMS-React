@@ -11,3 +11,26 @@
     scroll-margin-top: 86px;
   }
 }
+
+/* Explicit contrast for the contact form: readable regardless of browser form styles.
+   Keep these rules local to the landing page and loaded after restored-landing.css. */
+.legacy-landing .landing-contact-form input,
+.legacy-landing .landing-contact-form textarea {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  caret-color: #0f172a;
+  border: 1px solid #94a3b8 !important;
+  font-size: 16px !important;
+}
+
+.legacy-landing .landing-contact-form input::placeholder,
+.legacy-landing .landing-contact-form textarea::placeholder {
+  color: #64748b !important;
+  opacity: 1;
+}
+
+.legacy-landing .landing-contact-form input:focus,
+.legacy-landing .landing-contact-form textarea:focus {
+  outline: 2px solid #60a5fa;
+  outline-offset: 1px;
+}
