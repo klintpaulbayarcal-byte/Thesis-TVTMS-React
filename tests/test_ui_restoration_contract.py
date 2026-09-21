@@ -28,7 +28,7 @@ def test_sidebar_restores_grouped_admin_and_officer_navigation():
 
 def test_admin_dashboard_restores_operations_and_premium_sections():
     page = text('src/pages/AdminDashboard.jsx')
-    for marker in ['Recorded Citations by Area', 'Operations View', 'admin-welcome-banner', 'Executive Summary', 'Action Required', 'bento-grid', 'Top Hotspot Violations']:
+    for marker in ['Recorded Citations by Location', 'Operations View', 'admin-welcome-banner', 'Executive Summary', 'Action Required', 'bento-grid', 'Top Hotspot Violations']:
         assert marker in page, f'Admin dashboard should restore finalized marker: {marker}'
 
 
@@ -51,7 +51,7 @@ def test_login_restores_finalized_split_panel_design():
     page = text('src/pages/Login.jsx')
     main = text('src/main.jsx')
     for marker in ['login-modern', 'login-shell', 'login-visual-panel', 'Secure System Access', 'login-form-panel', 'System Online', 'route-preview', 'visual-meta']:
-        assert marker in page, f'Login should restore finalized marker: {marker}'
+        assert marker in page, f'Login should restore finalized auth marker: {marker}'
     assert 'restored-login.css' in main
 
 
