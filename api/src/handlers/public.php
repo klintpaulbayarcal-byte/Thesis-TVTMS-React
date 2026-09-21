@@ -56,7 +56,78 @@ function public_violations(array $params=[]): never
 }
 function public_contact(array $params=[]): never
 {
-    $b=json_input();$name=clean_string($b['full_name']??$b['fullName']??$b['name']??'',120);$email=normalize_email($b['email']??'');$subject=clean_string(preg_replace('/[\r\n]+/',' ',(string)($b['subject']??'')),150);$message=clean_string($b['message']??'',3000);
-    if($name===''||!filter_var($email,FILTER_VALIDATE_EMAIL)||$subject===''||strlen($message)<10)fail('Full name, valid email, subject, and a message of 10–3000 characters are required.',400,'VALIDATION_ERROR');
-    $r=supabase_rpc('tvtms_public_contact',['p_name'=>$name,'p_email'=>$email,'p_subject'=>$subject,'p_message'=>$message]);$err=rpc_domain_error($r);if($err)fail_domain($err);send_basic_email($email,'TVTMS Contact Confirmation','<p>Your message was submitted to the system Administrator.</p>');json_response(['success'=>true,'message'=>'Your message was submitted to the system Administrator.'],201);
+    $b=json_input();
+    $name=clean_string($b['full_name']??$b['fullName']??$b['name']??'',120);
+    $email=normalize_email($b['email']??'');
+    $subject=clean_string(preg_replace('/[\r\n]+/',' ',(string)($b['subject']??'')),150);
+    $message=clean_string($b['message']??'',3000);
+    if($name===''||!filter_var($email,FILTER_VALIDATE_EMAIL)||$subject===''||strlen($message)<10){
+        fail('Full name, valid email, subject, and a message of 10–3000 characters are required.',400,'VALIDATION_ERROR');
+    }
+
+    // Save the contact and create in-app administrator notifications atomically first.
+    $saved=supabase_rpc('tvtms_public_contact',[
+        'p_name'=>$name,'p_email'=>$email,'p_subject'=>$subject,'p_message'=>$message,
+    ]);
+    $error=rpc_domain_error($saved);
+    if($error)fail_domain($error);
+    $contactId=(int)($saved['contactId']??0);
+    if($contactId<=0)fail('Unable to confirm that your message was saved.',502,'CONTACT_SAVE_UNCONFIRMED');
+
+    // Accept administrator recipients only from active account records, not public input.
+    $recipients=[];
+    $adminStatus='no_recipient';
+    try {
+        $admins=supabase_select('users',['role'=>'eq.admin','status'=>'eq.active'],[
+            'select'=>'email','limit'=>100,
+        ]);
+        foreach($admins as $admin){
+            $address=normalize_email($admin['email']??'');
+            if(filter_var($address,FILTER_VALIDATE_EMAIL))$recipients[$address]=$address;
+        }
+    }catch(Throwable $e){
+        error_log('TVTMS contact: administrator email lookup failed.');
+        $adminStatus='failed';
+    }
+
+    $safeName=htmlspecialchars($name,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8');
+    $safeEmail=htmlspecialchars($email,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8');
+    $safeSubject=htmlspecialchars($subject,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8');
+    $safeMessage=nl2br(htmlspecialchars($message,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8'));
+    $adminHtml='<p>A public contact message was saved in TVTMS (reference #'.$contactId.').</p>'
+        .'<p><strong>From:</strong> '.$safeName.' ('.$safeEmail.')</p>'
+        .'<p><strong>Subject:</strong> '.$safeSubject.'</p>'
+        .'<p><strong>Message:</strong><br>'.$safeMessage.'</p>'
+        .'<p>Sign in to TVTMS to review the message.</p>';
+
+    if($recipients){
+        $accepted=0;
+        foreach($recipients as $recipient){
+            try{
+                $result=send_email($recipient,'TVTMS Contact Message #'.$contactId,$adminHtml);
+                if(($result['status']??'')==='accepted')$accepted++;
+            }catch(Throwable $e){error_log('TVTMS contact: administrator email attempt failed.');}
+        }
+        $adminStatus=$accepted===count($recipients)?'accepted':($accepted>0?'partial':'failed');
+    }
+
+    $confirmation='failed';
+    $visitorHtml='<p>Thank you for contacting TVTMS. Your message (reference #'.$contactId
+        .') was saved for administrator review.</p><p><strong>Subject:</strong> '.$safeSubject.'</p>'
+        .'<p>This is a submission acknowledgement, not a ticket or dispute decision.</p>';
+    try{
+        $result=send_email($email,'TVTMS Contact Confirmation #'.$contactId,$visitorHtml);
+        if(($result['status']??'')==='accepted')$confirmation='accepted';
+    }catch(Throwable $e){error_log('TVTMS contact: confirmation email attempt failed.');}
+
+    $summary='Your message was saved and administrators were notified inside TVTMS.';
+    if($adminStatus==='accepted'&&$confirmation==='accepted'){
+        $summary.=' Both emails were accepted by the mail server.';
+    }else{
+        $summary.=' One or more emails could not be confirmed; please do not resubmit the same message.';
+    }
+    json_response([
+        'success'=>true,'message'=>$summary,'contact_id'=>$contactId,
+        'email_status'=>['administrator'=>$adminStatus,'confirmation'=>$confirmation],
+    ],201);
 }
