@@ -31,4 +31,9 @@ def test_analytics_distinguishes_initial_loading_from_refresh_and_failure():
     assert 'Loading analytics' in s
     assert 'setLoaded(true)' in s
     assert 'Refreshing…' in s
-    assert 'setData({collections:c.data' in s
+    assert 'Promise.allSettled' in s
+    assert 'setData(current=>' in s
+    assert 'available.collections?' in s
+    assert 'available.payment?' in s
+    assert 'available.tickets?' in s
+    assert 'available.disputes?' in s
