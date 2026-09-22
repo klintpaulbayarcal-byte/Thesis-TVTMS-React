@@ -176,7 +176,7 @@ function tickets_cancel(array $params): never
 {
     $u=require_role(['admin']);$id=ticket_valid_id($params['id']??0);$b=json_input();$reason=clean_string($b['reason']??($_GET['reason']??''),500);
     if(strlen($reason)<5)fail('A cancellation reason between 5 and 500 characters is required',400,'VALIDATION_ERROR');
-    $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_mutate',['p_action'=>'cancel','p_id'=>$id,'p_user_id'=>(int)$u['id'],'p_role'=>$u['role'],'p_data'=>['reason'=>$reason]]));$ticket=$r['ticket']??[];
+    $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_mutate',['p_action'=>'cancel','p_id'=>$id,'p_user_id'=>(int)$u['id'],'p_role'=>$u['role'],'p_data'=>['status'=>'cancelled','reason'=>$reason]));$ticket=$r['ticket']??[];
     log_audit((int)$u['id'],'TICKET_CANCELLED','tickets',$id,['ticketNumber'=>$ticket['ticket_number']??null,'reason'=>$reason]);
     ok('Ticket cancelled successfully',['id'=>$id,'ticketNumber'=>$ticket['ticket_number']??null,'status'=>'cancelled']);
 }
@@ -185,7 +185,7 @@ function tickets_permanent_delete(array $params): never
 {
     $u=require_role(['admin']);$id=ticket_valid_id($params['id']??0);$reason=clean_string(json_input()['reason']??'',500);
     if(strlen($reason)<5)fail('A deletion reason between 5 and 500 characters is required',400,'VALIDATION_ERROR');
-    $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_mutate',['p_action'=>'delete','p_id'=>$id,'p_user_id'=>(int)$u['id'],'p_role'=>$u['role'],'p_data'=>['reason'=>$reason]));$ticket=$r['ticket']??[];
+    $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_mutate',['p_action'=>'delete','p_id'=>$id,'p_user_id'=>(int)$u['id'],'p_role'=>$u['role'],'p_data'=>['reason'=>$reason]]));$ticket=$r['ticket']??[];
     log_audit((int)$u['id'],'TICKET_PERMANENTLY_DELETED','tickets',$id,['ticketNumber'=>$ticket['ticket_number']??null,'reason'=>$reason]);
     ok('Ticket permanently deleted',['id'=>$id,'ticketNumber'=>$ticket['ticket_number']??null]);
 }
