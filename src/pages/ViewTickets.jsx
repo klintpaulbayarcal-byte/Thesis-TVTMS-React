@@ -11,7 +11,7 @@ import { csvCell } from '../utils/csv';
 
 export default function ViewTickets(){
   const [rows,setRows]=useState([]);const [filters,setFilters]=useState({search:'',status:'',page:1,pageSize:50});const [loading,setLoading]=useState(true);const [error,setError]=useState('');const navigate=useNavigate();const {user}=useAuth();
-  const load=async(nextFilters=filters)=>{setLoading(true);setError('');try{const response=nextFilters.search?await API.searchTickets(nextFilters.search):await API.tickets(nextFilters);setRows(firstArray(response,['tickets']));}catch(problem){setError(problem.message);}finally{setLoading(false);}};
+  const load=async(nextFilters=filters)=>{setLoading(true);setError('');try{const response=await API.tickets(nextFilters);setRows(firstArray(response,['tickets']));}catch(problem){setError(problem.message);}finally{setLoading(false);}};
   useEffect(()=>{load();},[filters.status]);
   const submit=event=>{event.preventDefault();load();};
   const reset=()=>{const clearedFilters={search:'',status:'',page:1,pageSize:50};setFilters(clearedFilters);if(filters.status==='')load(clearedFilters);};
