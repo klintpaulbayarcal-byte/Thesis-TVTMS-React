@@ -28,6 +28,7 @@ runtime, credentials, email transport, QR scanning, printing, or production
 workflows have been verified.
 
 Ticket history/payment change:
-- Review and stage-test supabase/migrations/202609190001_ticket_history_payment_display.sql before application upload.
+- Review and stage-test the four forward-only migrations listed in docs/TICKET_HISTORY_PAYMENT_DEPLOYMENT.md, in filename order, before application upload.
+- Configure the guarded workflow's FTP_SERVER_NAME with the Hostinger-provided hstgr.io hostname so TLS hostname verification remains enabled.
 - Follow docs/TICKET_HISTORY_PAYMENT_DEPLOYMENT.md from the source review copy.
 - Never overwrite an existing private api/config/config.local.php or runtime uploads directory.

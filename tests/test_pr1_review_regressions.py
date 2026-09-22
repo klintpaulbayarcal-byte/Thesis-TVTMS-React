@@ -37,9 +37,14 @@ def test_hostinger_deploy_bootstraps_over_ca_verified_ip_ftps():
     assert 'set ftp:ssl-force yes' in workflow
     assert 'set ftp:ssl-protect-data yes' in workflow
     assert 'set ssl:verify-certificate yes' in workflow
-    assert 'set ssl:check-hostname no' in workflow
+    assert 'ftp_server_name: ${{ secrets.ftp_server_name }}' in workflow
+    assert 'test -n "$ftp_server_name"' in workflow
+    assert 'getent ahostsv4 "$ftp_server_name"' in workflow
+    assert 'set ssl:check-hostname yes' in workflow
+    assert 'set ssl:check-hostname no' not in workflow
+    assert '"$ftp_server_name"' in workflow
     assert 'openssl s_client' in workflow
-    assert '*.hstgr.io' in workflow
+    assert '-verify_hostname "$ftp_server_name"' in workflow
 
     preflight = workflow.split(
         '- name: preflight hostinger certificate and remote subdomain root (no writes)', 1

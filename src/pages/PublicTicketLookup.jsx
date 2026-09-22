@@ -158,8 +158,6 @@ export default function PublicTicketLookup(){
             <div><dt>Date issued</dt><dd>{dateOnly(ticket.date_issued)}</dd></div><div><dt>Plate number</dt><dd>{ticket.plate_number||'—'}</dd></div>
             <div><dt>Violation</dt><dd>{ticket.violation_name||'—'}</dd></div><div><dt>Penalty</dt><dd>{money(ticket.penalty_amount)}</dd></div>
             <div><dt>Paid</dt><dd>{money(ticket.total_paid)}</dd></div><div><dt>Balance</dt><dd>{money(ticket.remaining_balance)}</dd></div>
-            <div className="span-2"><dt>Notification Email</dt><dd>{ticket.has_notification_email?ticket.notification_email_masked:'No email recorded'}</dd></div>
-            <div className="span-2"><dt>Location</dt><dd>{ticket.location||'—'}</dd></div>
           </dl>
           {ticket.dispute_eligible&&ticket.has_notification_email?<button type="button" className="dispute-trigger" onClick={()=>openDispute(ticket)}>File a Dispute</button>:<div className="dispute-ineligible"><strong>Dispute unavailable for this ticket.</strong><Notice type="info">{ticket.has_notification_email?ticket.dispute_message:'No notification email is recorded for verification.'}</Notice><p>If you need clarification, please contact the issuing office.</p></div>}
         </article>)}

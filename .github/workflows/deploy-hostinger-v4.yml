@@ -18,6 +18,7 @@ jobs:
     timeout-minutes: 25
     env:
       FTP_SERVER: ${{ secrets.FTP_SERVER }}
+      FTP_SERVER_NAME: ${{ secrets.FTP_SERVER_NAME }}
       FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
       FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
@@ -38,6 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$FTP_SERVER" || { echo 'FTP_SERVER secret is missing'; exit 1; }
+          test -n "$FTP_SERVER_NAME" || { echo 'FTP_SERVER_NAME secret is missing'; exit 1; }
           test -n "$FTP_USERNAME" || { echo 'FTP_USERNAME secret is missing'; exit 1; }
           test -n "$FTP_PASSWORD" || { echo 'FTP_PASSWORD secret is missing'; exit 1; }
           test -n "$SUPABASE_SECRET_KEY" || { echo 'SUPABASE_SECRET_KEY secret is missing'; exit 1; }
@@ -54,6 +56,7 @@ jobs:
           [[ "$SMTP_SECURE" = 'tls' || "$SMTP_SECURE" = 'ssl' ]] || { echo 'SMTP_SECURE must be tls or ssl'; exit 1; }
           [[ "$SMTP_FROM_EMAIL" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || { echo 'SMTP_FROM_EMAIL secret is invalid'; exit 1; }
           test "$FTP_SERVER" = '145.223.108.219' || { echo 'FTP_SERVER differs from the approved screenshot; stopping'; exit 1; }
+          [[ "$FTP_SERVER_NAME" =~ ^[A-Za-z0-9.-]+\.hstgr\.io$ ]] || { echo 'FTP_SERVER_NAME must be the Hostinger-provided hstgr.io hostname'; exit 1; }
           test "$FTP_USERNAME" = 'u948876618.trafficviolation' || { echo 'FTP_USERNAME differs from the approved subdomain FTP account; stopping'; exit 1; }
           echo 'Required secret names are populated and destination matches the approved FTP account.'
 
@@ -68,13 +71,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Hostinger supplied an IP-only FTP endpoint, while its CA-issued certificate
-          # identifies *.hstgr.io. Verify the chain and Hostinger SAN before disabling
-          # only lftp's impossible IP-to-DNS-name comparison. Encryption stays mandatory.
-          certificate="$(timeout 20 openssl s_client -connect "$FTP_SERVER:21" -starttls ftp -verify_return_error </dev/null 2>/tmp/tvtms-ftps-certificate.log | openssl x509 -noout -subject -ext subjectAltName)"
-          grep -Fq 'DNS:*.hstgr.io' <<<"$certificate" || { echo 'FTPS certificate is not issued for Hostinger (*.hstgr.io); stopping'; exit 1; }
-          options='set cmd:fail-exit yes; set ftp:ssl-force yes; set ftp:ssl-protect-data yes; set ssl:verify-certificate yes; set ssl:check-hostname no; set ftp:passive-mode yes; set net:timeout 15; set net:max-retries 1;'
-          lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER" -e "$options cls -1 /; bye"
+          resolved_ips="$(getent ahostsv4 "$FTP_SERVER_NAME" | awk '{print $1}' | sort -u)"
+          grep -Fxq "$FTP_SERVER" <<<"$resolved_ips" || { echo 'FTP_SERVER_NAME does not resolve to the approved FTP endpoint; stopping'; exit 1; }
+          timeout 20 openssl s_client -connect "$FTP_SERVER_NAME:21" -servername "$FTP_SERVER_NAME" -starttls ftp -verify_return_error -verify_hostname "$FTP_SERVER_NAME" </dev/null 2>/tmp/tvtms-ftps-certificate.log | openssl x509 -noout -subject >/tmp/tvtms-ftps-subject.log
+          options='set cmd:fail-exit yes; set ftp:ssl-force yes; set ftp:ssl-protect-data yes; set ssl:verify-certificate yes; set ssl:check-hostname yes; set ftp:passive-mode yes; set net:timeout 15; set net:max-retries 1;'
+          lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER_NAME" -e "$options cls -1 /; bye"
           echo 'CA-verified Hostinger FTPS and account-root login verified. No remote files changed.'
 
       - name: Set up Node.js
@@ -122,11 +123,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          options='set cmd:fail-exit yes; set ftp:ssl-force yes; set ftp:ssl-protect-data yes; set ssl:verify-certificate yes; set ssl:check-hostname no; set ftp:passive-mode yes; set net:timeout 20; set net:max-retries 2;'
+          options='set cmd:fail-exit yes; set ftp:ssl-force yes; set ftp:ssl-protect-data yes; set ssl:verify-certificate yes; set ssl:check-hostname yes; set ftp:passive-mode yes; set net:timeout 20; set net:max-retries 2;'
           # lftp mirror -R does not delete remote files without --delete.
           # Runtime uploads are never packaged or changed by this release.
           # Upload Apache policy files explicitly; --all belongs to cls, not mirror.
-          lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER" -e "$options mirror -R --verbose --no-perms --parallel=2 --exclude-glob uploads/ ./deploy/ /; put ./deploy/.htaccess -o /.htaccess; put ./deploy/api/.htaccess -o /api/.htaccess; put ./deploy/api/config/.htaccess -o /api/config/.htaccess; cls -1 /index.html; cls -1 /.htaccess; cls -1 /api/index.php; cls -1 /api/config/config.local.php; bye"
+          lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER_NAME" -e "$options mirror -R --verbose --no-perms --parallel=2 --exclude-glob uploads/ ./deploy/ /; put ./deploy/.htaccess -o /.htaccess; put ./deploy/api/.htaccess -o /api/.htaccess; put ./deploy/api/config/.htaccess -o /api/config/.htaccess; cls -1 /index.html; cls -1 /.htaccess; cls -1 /api/index.php; cls -1 /api/config/config.local.php; bye"
           echo 'FTP upload finished; verifying live site next.'
 
       - name: Verify the exact legacy redirect before cleanup
@@ -141,8 +142,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          options='set cmd:fail-exit yes; set ftp:ssl-force yes; set ftp:ssl-protect-data yes; set ssl:verify-certificate yes; set ssl:check-hostname no; set ftp:passive-mode yes; set net:timeout 20; set net:max-retries 2;'
-          remote_pages="$(lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER" -e "$options rm -f /pages/landing.html; cls -1 /pages; bye")"
+          options='set cmd:fail-exit yes; set ftp:ssl-force yes; set ftp:ssl-protect-data yes; set ssl:verify-certificate yes; set ssl:check-hostname yes; set ftp:passive-mode yes; set net:timeout 20; set net:max-retries 2;'
+          remote_pages="$(lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER_NAME" -e "$options rm -f /pages/landing.html; cls -1 /pages; bye")"
           if grep -Fxq 'landing.html' <<<"$remote_pages"; then
             echo 'Obsolete /pages/landing.html still exists after exact-file removal.'
             exit 1
