@@ -11,10 +11,10 @@ import { csvCell } from '../utils/csv';
 
 export default function ViewTickets(){
   const [rows,setRows]=useState([]);const [filters,setFilters]=useState({search:'',status:'',page:1,pageSize:50});const [loading,setLoading]=useState(true);const [error,setError]=useState('');const navigate=useNavigate();const {user}=useAuth();
-  const load=async()=>{setLoading(true);setError('');try{const response=filters.search?await API.searchTickets(filters.search):await API.tickets(filters);setRows(firstArray(response,['tickets']));}catch(problem){setError(problem.message);}finally{setLoading(false);}};
+  const load=async(nextFilters=filters)=>{setLoading(true);setError('');try{const response=nextFilters.search?await API.searchTickets(nextFilters.search):await API.tickets(nextFilters);setRows(firstArray(response,['tickets']));}catch(problem){setError(problem.message);}finally{setLoading(false);}};
   useEffect(()=>{load();},[filters.status]);
   const submit=event=>{event.preventDefault();load();};
-  const reset=()=>{setFilters({search:'',status:'',page:1,pageSize:50});setTimeout(load,0);};
+  const reset=()=>{const clearedFilters={search:'',status:'',page:1,pageSize:50};setFilters(clearedFilters);if(filters.status==='')load(clearedFilters);};
   const exportCsv=()=>{const data=[['Ticket','Date','Plate','Owner','Violation','Penalty','Status'],...rows.map(row=>[row.ticket_number,dateOnly(row.date_issued),row.plate_number,row.owner_name,row.violation_name,row.penalty_amount,row.payment_status??row.status])];const csv=data.map(line=>line.map(csvCell).join(',')).join('\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='tvtms-tickets.csv';a.click();URL.revokeObjectURL(url);};
   const columns=[{key:'ticket_number',label:'Ticket #'},{key:'date_issued',label:'Date',render:row=>dateOnly(row.date_issued)},{key:'plate_number',label:'Vehicle'},{key:'owner_name',label:'Owner'},{key:'violation_name',label:'Violation'},{key:'penalty_amount',label:'Penalty',render:row=>money(row.penalty_amount)},{key:'status',label:'Status',render:row=><StatusBadge value={row.payment_status??row.status}/>}];
   return <div className="restored-ticket-list-page">
