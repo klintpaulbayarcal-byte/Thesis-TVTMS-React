@@ -32,7 +32,12 @@ function ticket_notification_message(array $claim): array
     ];
 }
 
-function ticket_notification_attempt(int $actorId,array $ticket=[]): array
+/**
+ * A fresh explicit confirmation is required on creation AND each retry.
+ * The immutable snapshot is read from tickets, never the mutable vehicles fallback.
+ * SQL claim recipient and ticket identity are checked again before SMTP.
+ */
+function ticket_notification_attempt(int $actorId,array $ticket=[],?string $confirmedRecipient=null): array
 {
     $ticketId=(int)($ticket['id']??0);
     if($ticketId<=0){
@@ -40,6 +45,33 @@ function ticket_notification_attempt(int $actorId,array $ticket=[]): array
             'errorCode'=>'NOTIFICATION_TICKET_MISSING','statusCode'=>500,
         ]);
     }
+    $confirmed=strtolower(trim((string)($confirmedRecipient??'')));
+    if($confirmed===''||filter_var($confirmed,FILTER_VALIDATE_EMAIL)===false){
+        return ticket_notification_result('no_confirmed_recipient',null,false,'Ticket saved. Email was not sent because the recipient was not confirmed.');
+    }
+    try{
+        $rows=supabase_select('tickets',['id'=>'eq.'.$ticketId],[
+            'select'=>'id,user_id,owner_email_at_issue','limit'=>1,
+        ]);
+    }catch(Throwable){
+        error_log('Ticket notification recipient verification unavailable.');
+        return ticket_notification_result('failed',null,false,'Ticket saved, but recipient verification is unavailable.',[
+            'errorCode'=>'NOTIFICATION_RECIPIENT_CHECK_UNAVAILABLE','statusCode'=>503,
+        ]);
+    }
+    $record=$rows[0]??null;
+    if(!is_array($record)||(int)($record['id']??0)!==$ticketId){
+        return ticket_notification_result('failed',null,false,'Ticket notification record could not be verified.',[
+            'errorCode'=>'NOTIFICATION_TICKET_NOT_FOUND','statusCode'=>404,
+        ]);
+    }
+    $snapshot=strtolower(trim((string)($record['owner_email_at_issue']??'')));
+    if($snapshot===''||filter_var($snapshot,FILTER_VALIDATE_EMAIL)===false||!hash_equals($snapshot,$confirmed)){
+        return ticket_notification_result('no_confirmed_recipient',null,false,'Ticket saved. The confirmed recipient does not match the email recorded when this ticket was issued; email was not sent.',[
+            'errorCode'=>'NOTIFICATION_RECIPIENT_MISMATCH','statusCode'=>409,
+        ]);
+    }
+
     try{
         $claim=supabase_rpc('tvtms_ticket_email_claim',['p_ticket_id'=>$ticketId,'p_actor_id'=>$actorId]);
     }catch(Throwable){
@@ -72,8 +104,30 @@ function ticket_notification_attempt(int $actorId,array $ticket=[]): array
         return ticket_notification_result('unknown',null,false,'Ticket saved. The email delivery result is uncertain; automatic retry is disabled to prevent duplicates.',['attemptCount'=>$attempt]);
     }
 
-    $recipient=(string)($claim['recipient']??'');
+    $recipient=strtolower(trim((string)($claim['recipient']??'')));
     $masked=mask_email($recipient);
+    // The SQL function has a legacy fallback to the mutable vehicle address.
+    // Never trust that fallback or even a mismatched claim ticket ID for delivery.
+    if((int)($claim['ticketId']??0)!==$ticketId
+        ||filter_var($recipient,FILTER_VALIDATE_EMAIL)===false
+        ||!hash_equals($snapshot,$recipient)){
+        try{
+            $final=supabase_rpc('tvtms_ticket_email_finalize',[
+                'p_ticket_id'=>$ticketId,'p_status'=>'failed',
+                'p_error_code'=>'recipient_mismatch',
+                'p_error_message'=>'Claim did not match the verified ticket and its original recipient.',
+            ]);
+            if($error=rpc_domain_error($final))throw new RuntimeException('finalization rejected');
+        }catch(Throwable){
+            error_log('Mismatched notification claim could not be finalized.');
+            return ticket_notification_result('unknown',null,false,'Ticket saved. Recipient verification failed; no email was sent and retry is disabled until tracking is resolved.',[
+                'errorCode'=>'NOTIFICATION_CLAIM_MISMATCH','statusCode'=>409,'attemptCount'=>$attempt,
+            ]);
+        }
+        return ticket_notification_result('failed',null,false,'Ticket saved. Recipient verification failed; no email was sent.',[
+            'errorCode'=>'NOTIFICATION_CLAIM_MISMATCH','statusCode'=>409,'attemptCount'=>$attempt,
+        ]);
+    }
     $content=ticket_notification_message($claim);
     $mail=send_email($recipient,$content['subject'],$content['html']);
     $accepted=($mail['status']??'')==='accepted';
@@ -96,13 +150,13 @@ function ticket_notification_attempt(int $actorId,array $ticket=[]): array
     if($accepted){
         return ticket_notification_result('accepted',$masked,false,'Ticket saved. The mail server accepted the email notification.',['attemptCount'=>$attempt,'ticketNumber'=>$ticketNumber]);
     }
-    return ticket_notification_result('failed',$masked,true,'Ticket saved, but the email notification was not accepted. It can be retried safely.',['attemptCount'=>$attempt,'ticketNumber'=>$ticketNumber]);
+    return ticket_notification_result('failed',$masked,true,'Ticket saved, but the email notification was not accepted. It can be retried after confirming the recipient again.',['attemptCount'=>$attempt,'ticketNumber'=>$ticketNumber]);
 }
 
 function ticket_notification_read(array $ticket): array
 {
     $ticketId=(int)($ticket['id']??0);
-    $masked=mask_email((string)($ticket['owner_email']??''));
+    $masked=null;
     if($ticketId<=0)return ticket_notification_result('not_recorded',$masked,false,'No notification record is available.');
     try{
         $rows=supabase_select('ticket_email_notifications',['ticket_id'=>'eq.'.$ticketId,'notification_type'=>'eq.ticket_issued'],[
@@ -116,7 +170,7 @@ function ticket_notification_read(array $ticket): array
     $status=(string)($row['status']??'not_recorded');
     $messages=[
         'accepted'=>'The mail server accepted the ticket notification.',
-        'failed'=>'The ticket notification failed and can be retried safely.',
+        'failed'=>'The ticket notification failed and can be retried after confirming the recipient.',
         'not_applicable'=>'No valid notification email was recorded.',
         'sending'=>'A ticket notification attempt is in progress.',
         'unknown'=>'The delivery result is uncertain; retry is disabled to prevent duplicates.',
