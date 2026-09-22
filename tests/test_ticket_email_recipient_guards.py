@@ -33,9 +33,15 @@ function send_email(string $to,string $subject,string $html):array{
 require SOURCE;
 $r=ticket_notification_attempt(ACTOR,['id'=>44],CONFIRMED);
 echo json_encode(['result'=>$r,'mail'=>$mail,'calls'=>$calls]);'''
-    for key, value in {'SNAPSHOT': snapshot, 'CLAIM': claim, 'SOURCE': str(SOURCE),
-                       'ACTOR': actor, 'CONFIRMED': confirmed}.items():
-        script = script.replace(key, json.dumps(value))
+    expressions = {
+        'SNAPSHOT': json.dumps(snapshot),
+        'CLAIM': f'json_decode({json.dumps(json.dumps(claim))},true)',
+        'SOURCE': json.dumps(str(SOURCE)),
+        'ACTOR': str(actor),
+        'CONFIRMED': json.dumps(confirmed),
+    }
+    for key, value in expressions.items():
+        script = script.replace(key, value)
     outcome = subprocess.run([str(PHP), '-r', script], cwd=ROOT,
                              capture_output=True, text=True, timeout=12)
     assert outcome.returncode == 0, outcome.stderr
