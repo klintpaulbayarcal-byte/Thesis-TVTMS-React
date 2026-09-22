@@ -56,3 +56,17 @@ jobs:
           test ! -e deploy/uploads
           test ! -e deploy/.env
           test ! -e deploy/.env.local
+      - name: Archive verified tracked source for isolated testing (not a deployment)
+        run: |
+          set -euo pipefail
+          if git ls-files | grep -Ei '(^|/)(config\.local\.php|\.env(\..*)?|\.npmrc|id_rsa|id_ed25519)$'; then
+            echo 'Refusing to archive: potential credential file is tracked.' >&2
+            exit 1
+          fi
+          git archive --format=zip -o verified-feature-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-feature-source
+          path: verified-feature-source.zip
+          retention-days: 1
+          if-no-files-found: error
