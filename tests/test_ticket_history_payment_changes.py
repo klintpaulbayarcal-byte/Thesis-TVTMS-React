@@ -106,7 +106,7 @@ def test_public_lookup_source_does_not_render_private_owner_fields():
     forbidden = ['owner_name', 'owner_email', 'owner_address', 'driver_license_number', 'official_receipt_number']
     for field in forbidden:
         assert field not in lookup
-    assert 'notification_email_masked' in lookup
+    assert 'notificationEmailMasked' in lookup
     assert 'has_notification_email' in lookup
 
 

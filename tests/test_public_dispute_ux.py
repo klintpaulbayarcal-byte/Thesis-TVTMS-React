@@ -36,7 +36,8 @@ def test_dispute_submission_has_single_status_progress_and_no_email_input():
 
 def test_code_verification_precedes_reason_and_uses_masked_recipient():
     source = PAGE.read_text(encoding='utf-8')
-    assert 'selected.notification_email_masked' in source
+    assert 'notificationEmailMasked&&' in source
+    assert 'response.notificationEmailMasked' in source
     assert 'selected?.has_notification_email' in source
     assert 'API.publicDisputeRequestCode(selected.ticket_number)' in source
     assert 'API.publicDisputeVerifyCode' in source
@@ -50,6 +51,7 @@ def test_challenge_is_memory_only_and_resets_on_context_changes():
     source = PAGE.read_text(encoding='utf-8')
     assert "const resetDispute=" in source
     assert 'setChallengeToken' in source
+    assert "setNotificationEmailMasked('')" in source
     assert 'localStorage' not in source
     assert 'setSearchParams' not in source
     assert source.count('resetDispute(') >= 3

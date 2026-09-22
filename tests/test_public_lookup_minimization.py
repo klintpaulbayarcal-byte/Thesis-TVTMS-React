@@ -34,6 +34,10 @@ def test_public_lookup_sql_exposes_only_approved_ticket_and_balance_fields():
         assert "penalty_amount" in body
         assert "total_paid" in body
         assert "remaining_balance" in body
+        assert "case when td.status='cancelled' then 0" in body
+        assert "partially_paid" in body
+        assert "payment_status" in body
+        assert "limit 100" in body
 
 
 def test_public_handler_does_not_fetch_or_return_email_metadata():

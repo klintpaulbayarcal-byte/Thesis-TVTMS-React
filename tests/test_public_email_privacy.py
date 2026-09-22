@@ -52,6 +52,6 @@ def test_public_lookup_ui_uses_only_boolean_email_availability():
     source = (ROOT / "src/pages/PublicTicketLookup.jsx").read_text(encoding="utf-8")
     assert "ticket.has_notification_email" in source
     assert "ticket.notification_email_masked" not in source
-    assert "selected.notification_email_masked" in source
+    assert "notificationEmailMasked&&" in source
     for forbidden in ["owner_name", "owner_email", "owner_address", "driver_license_number", "official_receipt_number"]:
         assert forbidden not in source

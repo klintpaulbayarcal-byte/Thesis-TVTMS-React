@@ -19,7 +19,7 @@ function disputes_resolve(array $params): never
     if(in_array($status,['approved','rejected','closed'],true)&&strlen($notes)<5)fail('Resolution notes of at least 5 characters are required',400,'VALIDATION_ERROR');
     $r=supabase_rpc('tvtms_dispute_resolve',['p_id'=>$id,'p_status'=>$status,'p_notes'=>$notes?:null,'p_actor'=>(int)$u['id']]);$err=rpc_domain_error($r);if($err)fail_domain($err);if(!is_array($r))fail('Dispute could not be updated',500,'DISPUTE_UPDATE_FAILED');$d=$r['dispute']??[];
     log_audit((int)$u['id'],'DISPUTE_STATUS_UPDATED','disputes',$id,['status'=>$status,'ticketId'=>$d['ticket_id']??null]);
-    $email=$d['contact_email']??$d['owner_email']??null;if($email&&in_array($status,['approved','rejected','closed'],true))send_basic_email((string)$email,'Dispute Status Update — '.($d['ticket_number']??'TVTMS'),'<p>Your dispute is now <strong>'.htmlspecialchars(str_replace('_',' ',$status),ENT_QUOTES,'UTF-8').'</strong>.</p><p>'.nl2br(htmlspecialchars($notes,ENT_QUOTES,'UTF-8')).'</p>');
+    $email=$d['notification_email']??null;if($email&&in_array($status,['approved','rejected','closed'],true))send_basic_email((string)$email,'Dispute Status Update — '.($d['ticket_number']??'TVTMS'),'<p>Your dispute is now <strong>'.htmlspecialchars(str_replace('_',' ',$status),ENT_QUOTES,'UTF-8').'</strong>.</p><p>'.nl2br(htmlspecialchars($notes,ENT_QUOTES,'UTF-8')).'</p>');
     if(!empty($d['submitted_by']))create_notification((int)$d['submitted_by'],'dispute','Dispute Status Updated','Your dispute is now '.str_replace('_',' ',$status).'.','dispute',$id);
     ok('Dispute updated successfully',['id'=>$id,'status'=>$status,'ticketStatus'=>$status==='approved'?'cancelled':($d['ticket_status']??null)]);
 }

@@ -25,9 +25,10 @@ export default function PublicTicketLookup(){
   const [verificationStatus,setVerificationStatus]=useState('idle');
   const [challengeToken,setChallengeToken]=useState('');
   const [verificationCode,setVerificationCode]=useState('');
+  const [notificationEmailMasked,setNotificationEmailMasked]=useState('');
   const normalizedQuery=useMemo(()=>query.toUpperCase(),[query]);
 
-  const resetDispute=(clearSelection=true)=>{if(clearSelection)setSelected(null);setReason('');setDisputeNotice({type:'',text:''});setVerificationStatus('idle');setChallengeToken('');setVerificationCode('');};
+  const resetDispute=(clearSelection=true)=>{if(clearSelection)setSelected(null);setReason('');setDisputeNotice({type:'',text:''});setVerificationStatus('idle');setChallengeToken('');setVerificationCode('');setNotificationEmailMasked('');};
 
   const switchMode=(next)=>{setMode(next);setQuery('');setTickets([]);setSummary(null);resetDispute();setNotice({type:'',text:''});};
 
@@ -81,8 +82,9 @@ export default function PublicTicketLookup(){
     try{
       const response=await API.publicDisputeRequestCode(selected.ticket_number);
       setChallengeToken(response.challengeToken||'');
+      setNotificationEmailMasked(response.notificationEmailMasked||'');
       setVerificationStatus('code_sent');
-      setDisputeNotice({type:'info',text:`A six-digit verification code was sent to ${response.notificationEmailMasked||selected.notification_email_masked}.`});
+      setDisputeNotice({type:'info',text:`A six-digit verification code was sent to ${response.notificationEmailMasked||'the recorded notification email'}.`});
     }catch(error){setVerificationStatus('idle');setDisputeNotice({type:'error',text:error.message||'Unable to send a verification code. Please try again.'});}
   };
   const verifyCode=async()=>{
@@ -170,7 +172,7 @@ export default function PublicTicketLookup(){
           <Notice type={disputeNotice.type}>{disputeNotice.text}</Notice>
           {selected?<form className="dispute-form" onSubmit={dispute}>
             <div className="selected-ticket-summary">Selected ticket: <strong>{selected.ticket_number}</strong> · {selected.violation_name}</div>
-            <div className="field"><label>Notification Email</label><div>{selected.notification_email_masked}</div></div>
+            {notificationEmailMasked&&<div className="field"><label>Notification Email</label><div>{notificationEmailMasked}</div></div>}
             {verificationStatus!=='verified'&&verificationStatus!=='submitting'&&<div className="field"><button type="button" className="dispute-trigger" disabled={verificationStatus==='requesting'||verificationStatus==='verifying'} onClick={requestVerification}>{verificationStatus==='requesting'?'Sending code…':challengeToken?'Resend Code':'Send Verification Code'}</button></div>}
             {(verificationStatus==='code_sent'||verificationStatus==='verifying')&&<div className="field"><label htmlFor="disputeCode">Verification Code *</label><input id="disputeCode" inputMode="numeric" pattern="[0-9]{6}" minLength="6" maxLength="6" required disabled={verificationStatus==='verifying'} value={verificationCode} onChange={e=>setVerificationCode(e.target.value.replace(/\D/g,'').slice(0,6))} autoComplete="one-time-code" placeholder="6-digit code"/><button type="button" className="dispute-trigger" disabled={verificationStatus==='verifying'||verificationCode.length!==6} onClick={verifyCode}>{verificationStatus==='verifying'?'Verifying…':'Verify Code'}</button></div>}
             <div className="field"><label htmlFor="disputeReason">Reason for Dispute *</label><textarea id="disputeReason" rows="4" minLength="10" maxLength="4000" required disabled={verificationStatus!=='verified'} value={reason} onChange={e=>setReason(e.target.value)} placeholder="Explain why you believe this ticket should be disputed (at least 10 characters)." /></div>

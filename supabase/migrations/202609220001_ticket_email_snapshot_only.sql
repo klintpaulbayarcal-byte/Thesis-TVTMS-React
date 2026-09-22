@@ -39,7 +39,7 @@ begin
  if length(p_notes)>4000 or (p_status in ('approved','rejected','closed') and coalesce(length(trim(p_notes)),0)<5) then return jsonb_build_object('errorCode','VALIDATION_ERROR','message','Resolution notes of at least 5 characters are required','statusCode',400); end if;
  select ticket_id into ticket_id_value from public.disputes where id=p_id;
  perform 1 from public.tickets where id=ticket_id_value for update;
- select di.*,t.ticket_number,t.status ticket_status,t.owner_email_at_issue owner_email,t.owner_name_at_issue owner_name into d from public.disputes di join public.tickets t on t.id=di.ticket_id where di.id=p_id for update of di;
+ select di.*,t.ticket_number,t.status ticket_status,t.owner_email_at_issue notification_email,t.owner_name_at_issue owner_name into d from public.disputes di join public.tickets t on t.id=di.ticket_id where di.id=p_id for update of di;
  if not found then return jsonb_build_object('errorCode','DISPUTE_NOT_FOUND','message','Dispute not found','statusCode',404); end if;
  if d.status in ('approved','rejected','closed') then return jsonb_build_object('errorCode','DISPUTE_FINALIZED','message','This dispute is already finalized','statusCode',409); end if;
  if p_status='approved' and (select coalesce(sum(amount_paid),0) from public.payments where ticket_id=d.ticket_id and payment_status<>'voided')>0 then return jsonb_build_object('errorCode','PAYMENT_EXISTS','message','A dispute cannot be approved after payment has been recorded','statusCode',409); end if;
@@ -158,13 +158,14 @@ returns jsonb language sql stable security invoker set search_path='' as $$
  current_date-td.date_issued dispute_age_days,
  case when exists(select 1 from public.disputes d where d.ticket_id=td.id and d.status in ('submitted','under_review')) then 1 else 0 end has_open_dispute,
  coalesce(nullif(trim(t.owner_email_at_issue),''),'')<>'' has_notification_email,
- coalesce(p.total,0) total_paid,greatest(td.penalty_amount-coalesce(p.total,0),0) remaining_balance
+ coalesce(p.total,0) total_paid,case when td.status='cancelled' then 0 else greatest(td.penalty_amount-coalesce(p.total,0),0) end remaining_balance,
+ case when td.status='cancelled' then 'cancelled' when greatest(td.penalty_amount-coalesce(p.total,0),0)=0 then 'paid' when coalesce(p.total,0)>0 then 'partially_paid' else 'unpaid' end payment_status
  from public.ticket_details td join public.tickets t on t.id=td.id
  left join lateral (select sum(amount_paid) total from public.payments where ticket_id=td.id and payment_status<>'voided') p on true
  where (p_plate is not null or p_ticket is not null)
  and (p_plate is null or replace(replace(td.plate_number,'-',''),' ','')=p_plate)
  and (p_ticket is null or td.ticket_number=p_ticket)
- order by td.date_issued desc,td.id desc limit 20) q;
+ order by td.date_issued desc,td.id desc limit 100) q;
 $$;
 
 create or replace function public.tvtms_public_vehicle(p_plate text)
@@ -173,10 +174,11 @@ returns jsonb language sql stable security invoker set search_path='' as $$
  'vehicles',coalesce((select jsonb_agg(to_jsonb(v)) from (select plate_number,vehicle_type from public.vehicles where replace(replace(plate_number,'-',''),' ','')=p_plate limit 1) v),'[]'::jsonb),
  'violations',coalesce((select jsonb_agg(to_jsonb(q) order by q.date_issued desc,q.ticket_number desc) from (
  select td.ticket_number,td.plate_number,td.violation_name,td.violation_code,td.date_issued,td.status,td.penalty_amount,
- coalesce(p.total,0) total_paid,greatest(td.penalty_amount-coalesce(p.total,0),0) remaining_balance
+ coalesce(p.total,0) total_paid,case when td.status='cancelled' then 0 else greatest(td.penalty_amount-coalesce(p.total,0),0) end remaining_balance,
+ case when td.status='cancelled' then 'cancelled' when greatest(td.penalty_amount-coalesce(p.total,0),0)=0 then 'paid' when coalesce(p.total,0)>0 then 'partially_paid' else 'unpaid' end payment_status
  from public.ticket_details td
  left join lateral (select sum(amount_paid) total from public.payments where ticket_id=td.id and payment_status<>'voided') p on true
- where replace(replace(td.plate_number,'-',''),' ','')=p_plate order by td.date_issued desc,td.id desc limit 20) q),'[]'::jsonb));
+ where replace(replace(td.plate_number,'-',''),' ','')=p_plate order by td.date_issued desc,td.id desc limit 100) q),'[]'::jsonb));
 $$;
 
 revoke all on function public.tvtms_public_lookup(text,text) from public, anon, authenticated, service_role;

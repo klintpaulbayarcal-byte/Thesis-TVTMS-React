@@ -53,3 +53,10 @@ def test_replacement_functions_remain_service_role_only():
         assert f"revoke all on function public.{signature} from public, anon, authenticated, service_role" in source
         assert f"grant execute on function public.{signature} to service_role" in source
 
+
+def test_dispute_resolution_handler_uses_only_snapshot_notification_recipient():
+    handler = (ROOT / "api/src/handlers/disputes.php").read_text(encoding="utf-8").lower()
+    resolve = handler.split("function disputes_resolve", 1)[1]
+    assert "$d['notification_email']" in resolve
+    assert "$d['contact_email']" not in resolve
+    assert "$d['owner_email']" not in resolve
