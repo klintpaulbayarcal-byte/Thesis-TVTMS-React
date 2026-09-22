@@ -46,7 +46,7 @@ export default function LicensePlateLookup(){
   const openResult=async row=>{setBusy(true);setError('');try{await loadVehicle(row.plate_number);}catch(problem){setError(problem.message);}finally{setBusy(false);}};
   const onQueryChange=event=>{const value=event.target.value;setQuery(mode==='owner'?value:value.toUpperCase());};
   const resultColumns=[{key:'plate_number',label:'Plate'},{key:'vehicle_type',label:'Type'},{key:'owner_name',label:'Owner'},{key:'driver_license_number',label:'License'},{key:'violation_count',label:'Plate tickets'}];
-  const historyColumns=[{key:'ticket_number',label:'Ticket'},{key:'violation_name',label:'Violation'},{key:'date_issued',label:'Date Issued',render:row=>dateOnly(row.date_issued)},{key:'location',label:'Location'},{key:'penalty_amount',label:'Penalty',render:row=>money(row.penalty_amount)},{key:'status',label:'Status',render:row=><StatusBadge value={row.status}/>},{key:'remaining_balance',label:'Balance',render:row=>money(row.remaining_balance)}];
+  const historyColumns=[{key:'ticket_number',label:'Ticket'},{key:'violation_name',label:'Violation'},{key:'date_issued',label:'Date Issued',render:row=>dateOnly(row.date_issued)},{key:'location',label:'Location'},{key:'penalty_amount',label:'Penalty',render:row=>money(row.penalty_amount)},{key:'status',label:'Status',render:row=><StatusBadge value={row.payment_status??row.status}/>},{key:'remaining_balance',label:'Balance',render:row=>money(row.remaining_balance)}];
 
   return <div className="lookup-container restored-violator-lookup">
     <section className="lookup-section">
