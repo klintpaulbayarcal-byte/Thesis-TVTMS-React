@@ -9,6 +9,7 @@ import './styles/restored-landing.css';
 import './styles/restored-login.css';
 import './styles/restored-public-lookup.css';
 import './styles/landing-anchor-offset.css';
+import './styles/defense-readiness-polish.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
