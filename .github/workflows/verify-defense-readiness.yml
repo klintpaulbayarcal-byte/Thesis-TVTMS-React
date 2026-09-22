@@ -27,6 +27,18 @@ jobs:
           python -m pip install pytest
           echo "TVTMS_PYTHON=$(command -v python)" >> "$GITHUB_ENV"
           echo "TVTMS_PHP=$(command -v php)" >> "$GITHUB_ENV"
+      - name: Identify dependency advisories without modifying packages
+        run: |
+          npm audit --json > "$RUNNER_TEMP/tvtms-audit.json" || true
+          npm audit --omit=dev --json > "$RUNNER_TEMP/tvtms-audit-production.json" || true
+          node - "$RUNNER_TEMP/tvtms-audit.json" "$RUNNER_TEMP/tvtms-audit-production.json" <<'NODE'
+          const fs=require('fs');
+          for(const [index,file] of process.argv.slice(2).entries()) {
+            const report=JSON.parse(fs.readFileSync(file,'utf8'));
+            console.log(index===0?'FULL DEPENDENCY AUDIT':'PRODUCTION DEPENDENCY AUDIT');
+            console.log(JSON.stringify({counts:report.metadata?.vulnerabilities,packages:Object.entries(report.vulnerabilities||{}).map(([name,entry])=>({name,severity:entry.severity,isDirect:entry.isDirect,range:entry.range,via:entry.via.map(issue=>typeof issue==='string'?issue:{name:issue.name,title:issue.title,url:issue.url,range:issue.range}),fixAvailable:entry.fixAvailable}))},null,2));
+          }
+          NODE
       - name: Check syntax and PHP version
         run: |
           set -euo pipefail
