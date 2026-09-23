@@ -48,5 +48,5 @@ def test_public_handler_does_not_fetch_or_return_email_metadata():
 
 
 def test_public_lookup_ui_does_not_render_incident_location():
-    page = read("src/pages/publicticketlookup.jsx")
+    page = read("src/pages/PublicTicketLookup.jsx")
     assert "ticket.location" not in page
