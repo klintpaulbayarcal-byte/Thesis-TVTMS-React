@@ -28,8 +28,8 @@ def test_hostinger_deploy_runs_on_every_sync_v4_push():
     assert 'paths-ignore:' not in trigger
 
 
-def test_hostinger_deploy_bootstraps_over_ca_verified_ip_ftps():
-    """Requiring old remote files or weakening FTPS must block a first GitHub-only release."""
+def test_hostinger_deploy_uses_explicitly_approved_ip_only_ftps_fallback():
+    """The owner-approved IP fallback keeps TLS, CA validation, and the fixed endpoint guard."""
     workflow = read('.github/workflows/deploy-hostinger-v4.yml')
 
     assert "test \"$ftp_server\" = '145.223.108.219'" in workflow
@@ -37,14 +37,15 @@ def test_hostinger_deploy_bootstraps_over_ca_verified_ip_ftps():
     assert 'set ftp:ssl-force yes' in workflow
     assert 'set ftp:ssl-protect-data yes' in workflow
     assert 'set ssl:verify-certificate yes' in workflow
-    assert 'ftp_server_name: ${{ secrets.ftp_server_name }}' in workflow
-    assert 'test -n "$ftp_server_name"' in workflow
-    assert 'getent ahostsv4 "$ftp_server_name"' in workflow
-    assert 'set ssl:check-hostname yes' in workflow
-    assert 'set ssl:check-hostname no' not in workflow
-    assert '"$ftp_server_name"' in workflow
+    assert 'ftp_server_name:' not in workflow
+    assert 'test -n "$ftp_server_name"' not in workflow
+    assert 'getent ahostsv4' not in workflow
+    assert 'set ssl:check-hostname no' in workflow
+    assert 'set ssl:verify-certificate yes' in workflow
     assert 'openssl s_client' in workflow
-    assert '-verify_hostname "$ftp_server_name"' in workflow
+    assert '-connect "$ftp_server:21"' in workflow
+    assert '-verify_return_error' in workflow
+    assert "grep -fq 'dns:*.hstgr.io'" in workflow
 
     preflight = workflow.split(
         '- name: preflight hostinger certificate and remote subdomain root (no writes)', 1

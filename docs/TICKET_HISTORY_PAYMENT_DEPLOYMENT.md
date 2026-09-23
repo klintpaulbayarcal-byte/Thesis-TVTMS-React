@@ -20,7 +20,7 @@ This package does not deploy itself and does not contain production credentials.
 - Privately copy `api/config/config.local.example.php` to `api/config/config.local.php` on the target server, or use server environment variables.
 - Set the server-only Supabase secret, a random token secret of at least 32 characters, the HTTPS public URL, and `development=false`.
 - Never place `config.local.php`, `.env*`, service-role keys, SMTP passwords, database passwords, or user uploads in a shared ZIP or public web asset.
-- For the guarded GitHub deployment, configure `FTP_SERVER_NAME` with the Hostinger-provided `*.hstgr.io` FTP hostname. Keep `FTP_SERVER` set to the separately approved IP. The workflow requires the hostname to resolve to that IP and enables TLS hostname verification; do not substitute an IP-only connection or disable the check.
+- The guarded GitHub deployment currently uses the owner-approved fixed-IP fallback because the Hostinger plan hostname is unavailable. Keep `FTP_SERVER` pinned to the separately approved IP. TLS encryption, CA verification, and the expected Hostinger `*.hstgr.io` certificate SAN remain mandatory, while hostname matching is disabled for this explicit fallback.
 
 ## Deployment order after separate approval
 
