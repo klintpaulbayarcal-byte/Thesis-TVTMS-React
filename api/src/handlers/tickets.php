@@ -27,7 +27,15 @@ function ticket_apply_payment_totals(array $tickets, array $payments): array
         $penaltySource=$ticket['penalty_amount_at_issue']??$ticket['penalty_amount']??0;
         $penalty=round((float)$penaltySource,2);
         $ticket['total_paid']=$paid;
-        $ticket['remaining_balance']=round(max(0,$penalty-$paid),2);
+        $ticket['remaining_balance']=strtolower((string)($ticket['status']??''))==='cancelled'
+            ?0.0
+            :round(max(0,$penalty-$paid),2);
+        $storedStatus=strtolower((string)($ticket['status']??''));
+        $ticket['payment_status']=$storedStatus==='cancelled'
+            ?'cancelled'
+            :($ticket['remaining_balance']<=0
+                ?'paid'
+                :($paid>0?'partially_paid':'unpaid'));
     }
     unset($ticket);
     return $tickets;
@@ -93,6 +101,7 @@ function tickets_get_one(array $params): never
     $ticket['remarks']=$base[0]['remarks']??null;
     $enriched=ticket_enrich_payment_totals([$ticket]);
     $ticket=$enriched[0]??$ticket;
+    $ticket['notification']=ticket_notification_read($ticket);
     ok('Ticket fetched successfully',$ticket,['ticket'=>$ticket]);
 }
 
@@ -112,8 +121,30 @@ function tickets_create(array $params=[]): never
     $ticket=$r['ticket']??null;if(!is_array($ticket))fail('Ticket creation returned no record',500,'TICKET_CREATE_FAILED');
     $penalty=$r['penaltyInfo']??[];
     log_audit((int)$u['id'],'TICKET_CREATED','tickets',(int)($ticket['id']??0),['ticketNumber'=>$ticket['ticket_number']??null,'violationId'=>$vid,'plateNumber'=>$plate,'penaltyInfo'=>$penalty]);
-    if($email!=='')send_basic_email($email,'Traffic Violation Notice — '.($ticket['ticket_number']??'TVTMS'),'<p>A traffic violation ticket <strong>'.htmlspecialchars((string)($ticket['ticket_number']??''),ENT_QUOTES,'UTF-8').'</strong> was issued for plate <strong>'.htmlspecialchars($plate,ENT_QUOTES,'UTF-8').'</strong>.</p>');
-    ok('Ticket issued successfully',$ticket,['ticket'=>$ticket],201);
+    $confirmed=(($b['recipient_email_confirmed']??null)===true&&$email!=='')?$email:null;
+    try{
+        $notification=ticket_notification_attempt((int)$u['id'],$ticket,$confirmed);
+    }catch(Throwable){
+        error_log('Ticket notification failed after ticket persistence.');
+        $notification=ticket_notification_result('unknown',null,false,'Ticket saved, but email delivery is uncertain. Do not issue a duplicate ticket.');
+    }
+    ok('Ticket issued successfully',$ticket,['ticket'=>$ticket,'notification'=>$notification],201);
+}
+
+function tickets_retry_notification(array $params): never
+{
+    $u=require_role(['admin','apprehending_officer']);
+    $id=ticket_valid_id($params['id']??0);$b=json_input();
+    $confirmed=(($b['recipient_email_confirmed']??null)===true&&is_string($b['owner_email']??null))?normalize_email($b['owner_email']):'';
+    if($confirmed===''||filter_var($confirmed,FILTER_VALIDATE_EMAIL)===false){
+        fail('Confirm the intended email address before retrying this ticket notification.',409,'NOTIFICATION_RECIPIENT_REQUIRED');
+    }
+    $notification=ticket_notification_attempt((int)$u['id'],['id'=>$id],$confirmed);
+    $statusCode=(int)($notification['statusCode']??0);
+    if($statusCode>=400){
+        fail((string)($notification['message']??'Notification retry was rejected.'),$statusCode,(string)($notification['errorCode']??'NOTIFICATION_RETRY_REJECTED'));
+    }
+    ok('Notification retry completed',$notification,['notification'=>$notification]);
 }
 
 function tickets_update_status(array $params): never
@@ -163,9 +194,11 @@ function tickets_mark_unpaid(array $params): never
 {
     $u=require_role(['admin']);$id=ticket_valid_id($params['id']??0);$reason=clean_string(json_input()['reason']??'',500);
     if(strlen($reason)<5)fail('A correction reason between 5 and 500 characters is required',400,'VALIDATION_ERROR');
-    $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_mutate',['p_action'=>'unpaid','p_id'=>$id,'p_user_id'=>(int)$u['id'],'p_role'=>$u['role'],'p_data'=>['reason'=>$reason]]));$ticket=$r['ticket']??[];
-    log_audit((int)$u['id'],'TICKET_MARKED_UNPAID','tickets',$id,['ticketNumber'=>$ticket['ticket_number']??null,'voidedPayments'=>(int)($r['voidedPayments']??0),'reason'=>$reason]);
-    ok('Ticket marked unpaid successfully',['id'=>$id,'ticketNumber'=>$ticket['ticket_number']??null,'status'=>'unpaid','voidedPayments'=>(int)($r['voidedPayments']??0)]);
+    $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_mark_unpaid',['p_id'=>$id,'p_user_id'=>(int)$u['id'],'p_role'=>$u['role'],'p_reason'=>$reason]));$ticket=$r['ticket']??[];
+    $voidedIds=array_values(array_map('intval',is_array($r['voidedPaymentIds']??null)?$r['voidedPaymentIds']:[]));
+    $voidedCount=(int)($r['voidedPayments']??count($voidedIds));$voidedAmount=(float)($r['voidedPaymentAmount']??0);
+    log_audit((int)$u['id'],'TICKET_MARKED_UNPAID','tickets',$id,['ticketNumber'=>$ticket['ticket_number']??null,'voidedPayments'=>$voidedCount,'voidedPaymentIds'=>$voidedIds,'voidedPaymentAmount'=>$voidedAmount,'reason'=>$reason]);
+    ok('Ticket marked unpaid successfully',['id'=>$id,'ticketNumber'=>$ticket['ticket_number']??null,'status'=>'unpaid','voidedPayments'=>$voidedCount,'voidedPaymentIds'=>$voidedIds,'voidedPaymentAmount'=>$voidedAmount]);
 }
 
 function tickets_stats(array $params=[]): never

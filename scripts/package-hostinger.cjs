@@ -20,7 +20,7 @@ function copy(src, dst) {
 
 copy(dist, deploy);
 copy(path.join(root, 'api'), path.join(deploy, 'api'));
-copy(path.join(root, 'uploads'), path.join(deploy, 'uploads'));
+// Deliberately exclude 'uploads': it is runtime/user data, not application source.
 copy(path.join(root, '.htaccess'), path.join(deploy, '.htaccess'));
 copy(path.join(root, 'DEPLOYMENT_README.txt'), path.join(deploy, 'DEPLOYMENT_README.txt'));
 

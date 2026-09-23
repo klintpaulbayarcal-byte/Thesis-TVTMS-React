@@ -27,6 +27,7 @@ export default function TicketDetails() {
   const [actionType, setActionType] = useState('');
   const [actionReason, setActionReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const [notificationBusy, setNotificationBusy] = useState(false);
   const qrCanvas = useRef(null);
   const [payment, setPayment] = useState({
     amount_paid: '',
@@ -169,6 +170,23 @@ export default function TicketDetails() {
     }
   };
 
+  const retryNotification = async () => {
+    setNotificationBusy(true);
+    try {
+      const response = await API.retryTicketNotification(id);
+      const outcome = response.notification ?? response.data ?? {};
+      await load();
+      setNotice({
+        type: outcome.status === 'accepted' || outcome.status === 'already_accepted' ? 'success' : 'info',
+        text: outcome.message || 'No email notification status was returned.',
+      });
+    } catch (error) {
+      setNotice({ type: 'error', text: error.message });
+    } finally {
+      setNotificationBusy(false);
+    }
+  };
+
   const downloadEvidence = async row => {
     try {
       const blob = await API.evidenceFile(row.id);
@@ -201,6 +219,7 @@ export default function TicketDetails() {
   const penalty = ticket.penalty_amount_at_issue ?? ticket.penalty_amount;
   const canEdit = ticket.status !== 'cancelled';
   const canRecordPayment = isAdmin && ticket.status !== 'cancelled' && Number(ticket.remaining_balance ?? penalty ?? 0) > 0;
+  const notification = ticket.notification ?? {};
 
   const timelineColumns = [
     { key: 'created_at', label: 'Date', render: row => dateTime(row.created_at) },
@@ -226,7 +245,7 @@ export default function TicketDetails() {
 
         <section className="ticket-info-section"><div className="ticket-section-title"><span>02</span><h3>Vehicle Information</h3></div><div className="details-grid"><div><dt>Plate number</dt><dd className="plate-value">{ticket.plate_number}</dd></div><div><dt>Vehicle type</dt><dd>{ticket.vehicle_type || '—'}</dd></div><div><dt>Driver / owner</dt><dd>{ticket.owner_name || '—'}</dd></div><div><dt>License number</dt><dd>{ticket.driver_license_number || '—'}</dd></div></div></section>
 
-        <section className="ticket-info-section"><div className="ticket-section-title"><span>03</span><h3>Violation Information</h3></div><div className="details-grid"><div className="span-2"><dt>Violation</dt><dd>{ticket.violation_code} · {ticket.violation_name}</dd></div><div className="span-2"><dt>Remarks</dt><dd>{ticket.remarks || '—'}</dd></div></div></section>
+        <section className="ticket-info-section"><div className="ticket-section-title"><span>03</span><h3>Violation Information</h3></div><div className="details-grid"><div className="span-2"><dt>Violation</dt><dd>{ticket.violation_code} · {ticket.violation_name}</dd></div><div><dt>Plate Ticket Count at Issuance</dt><dd>{ticket.plate_ticket_count_at_issue??'—'}</dd></div><div><dt>Same-Plate/Same-Violation Penalty Level</dt><dd>{ticket.same_violation_offense_count_at_issue??'—'}</dd></div><div className="span-2"><dt>Remarks</dt><dd>{ticket.remarks || '—'}</dd></div></div></section>
 
         <section className="ticket-info-section"><div className="ticket-section-title"><span>04</span><h3>Issued By</h3></div><div className="details-grid"><div><dt>Apprehending Officer</dt><dd>{ticket.officer_name || '—'}</dd></div><div><dt>Current Status</dt><dd><StatusBadge value={ticket.status}/></dd></div></div></section>
       </div>
@@ -234,6 +253,14 @@ export default function TicketDetails() {
       <div className="ticket-financial-strip"><div><span>Penalty Amount</span><strong>{money(penalty)}</strong></div><div><span>Total Paid</span><strong className="paid-value">{money(ticket.total_paid)}</strong></div><div><span>Remaining Balance</span><strong className="balance-value">{money(ticket.remaining_balance)}</strong></div></div>
 
       {isAdmin&&<div className="ticket-admin-actions">{ticket.status==='paid'&&<button className="btn btn-secondary" onClick={()=>startAction('unpaid')}>Mark Unpaid</button>}<button className="btn btn-ghost danger-link" onClick={()=>startAction('delete')}>Permanent Delete</button></div>}
+    </section>
+
+    <section className="card no-print">
+      <div className="card-header">
+        <div><span className="section-kicker">EMAIL NOTICE</span><h3 className="card-title">Ticket Notification</h3><p>{notification.message || 'No email notification status is available.'}</p></div>
+        {notification.retryAllowed&&<button className="btn btn-secondary btn-sm" disabled={notificationBusy} onClick={retryNotification}>{notificationBusy?'Retrying…':'Retry Email'}</button>}
+      </div>
+      <div className="card-body details-grid"><div><dt>Delivery status</dt><dd><StatusBadge value={notification.status || 'not recorded'}/></dd></div><div><dt>Recipient</dt><dd>{notification.recipientMasked || 'Not available'}</dd></div></div>
     </section>
 
     <section className="card ticket-qr-card no-print">

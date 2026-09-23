@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PHP = Path(r"C:\tools\php83\php.exe")
+PHP = Path(os.environ.get("TVTMS_PHP", r"C:\tools\php83\php.exe"))
 
 
 def run_php(script: str) -> subprocess.CompletedProcess[str]:
@@ -102,19 +102,18 @@ auth_logout([]);'''
     assert ["audit", "LOGOUT"] in body["calls"]
 
 
-def invoke_public_dispute(owner_matches: bool) -> dict:
+def invoke_public_dispute(body: dict) -> dict:
     handler = json.dumps(str(ROOT / "api/src/handlers/public.php"))
-    match = "true" if owner_matches else "false"
-    script = f'''$selectCalls=0;$rpcCalls=0;
-function json_input(): array {{ return ["ticket_number"=>"TVT-2026-000001","email"=>"owner@example.invalid","reason"=>"A sufficiently detailed dispute reason."]; }}
+    runtime = json.dumps(str(ROOT / "api/src/dispute_verification.php"))
+    script = f'''$rpcCalls=[];$body=json_decode({json.dumps(json.dumps(body))},true);
+function json_input(): array {{ global $body;return $body; }}
 function clean_string($value,int $max=4000): string {{ return substr(trim((string)$value),0,$max); }}
-function normalize_email($value): string {{ return strtolower(trim((string)$value)); }}
-function supabase_select(string $table,array $filters,array $options=[]): array {{ global $selectCalls; $selectCalls++; return {match} ? [["id"=>44]] : []; }}
-function supabase_rpc(string $name,array $args=[]): mixed {{ global $rpcCalls; $rpcCalls++; return ["disputeId"=>99]; }}
+function supabase_rpc(string $name,array $args=[]): mixed {{ global $rpcCalls;$rpcCalls[]=[$name,$args];return ["disputeId"=>99]; }}
 function rpc_domain_error(mixed $result): ?array {{ return null; }}
 function fail_domain(array $error): never {{ exit(2); }}
-function fail(string $message,int $status=400,string $errorCode="ERROR",array $extra=[]): never {{ global $selectCalls,$rpcCalls; echo json_encode(["status"=>$status,"errorCode"=>$errorCode,"selectCalls"=>$selectCalls,"rpcCalls"=>$rpcCalls]); exit; }}
-function json_response(array $payload,int $status=200): never {{ global $selectCalls,$rpcCalls; echo json_encode(["status"=>$status,"payload"=>$payload,"selectCalls"=>$selectCalls,"rpcCalls"=>$rpcCalls]); exit; }}
+function fail(string $message,int $status=400,string $errorCode="ERROR",array $extra=[]): never {{ global $rpcCalls;echo json_encode(["status"=>$status,"errorCode"=>$errorCode,"rpcCalls"=>$rpcCalls]);exit; }}
+function json_response(array $payload,int $status=200): never {{ global $rpcCalls;echo json_encode(["status"=>$status,"payload"=>$payload,"rpcCalls"=>$rpcCalls]);exit; }}
+require {runtime};
 require {handler};
 public_dispute([]);'''
     result = run_php(script)
@@ -122,19 +121,19 @@ public_dispute([]);'''
     return json.loads(result.stdout)
 
 
-def test_public_dispute_requires_matching_owner_email_before_rpc():
-    """Knowing only a ticket number must not let an anonymous caller open a dispute."""
-    rejected = invoke_public_dispute(False)
-    assert rejected == {
-        "status": 404,
-        "errorCode": "TICKET_VERIFICATION_FAILED",
-        "selectCalls": 1,
-        "rpcCalls": 0,
-    }
-    accepted = invoke_public_dispute(True)
+def test_public_dispute_requires_verified_challenge_and_never_uses_raw_email():
+    """Email knowledge alone cannot file a dispute; a ticket-bound opaque challenge is required."""
+    reason = "A sufficiently detailed dispute reason."
+    rejected = invoke_public_dispute({"ticketNumber": "TVT-2026-000001", "email": "owner@example.invalid", "reason": reason})
+    assert rejected["status"] == 400
+    assert rejected["errorCode"] == "VALIDATION_ERROR"
+    assert rejected["rpcCalls"] == []
+
+    accepted = invoke_public_dispute({"ticketNumber": "TVT-2026-000001", "challengeToken": "A" * 43, "email": "ignored@example.invalid", "reason": reason})
     assert accepted["status"] == 201
-    assert accepted["selectCalls"] == 1
-    assert accepted["rpcCalls"] == 1
+    assert accepted["rpcCalls"][0][0] == "tvtms_public_dispute_verified"
+    assert set(accepted["rpcCalls"][0][1]) == {"p_ticket", "p_challenge_hash", "p_reason"}
+    assert "ignored@example.invalid" not in json.dumps(accepted)
 
 
 def test_development_router_serves_files_from_the_real_uploads_directory():
@@ -183,7 +182,9 @@ def test_manual_ticket_status_cannot_fabricate_payment_history():
     valid_statuses = handler.split("$valid=", 1)[1].split(";", 1)[0]
     assert "partially_paid" not in valid_statuses
     assert "status==='partially_paid'" in handler
-    assert "partially_paid" not in migration.split("elsif p_action='status'", 1)[1].split("elsif p_action='details'", 1)[0]
+    status_branch = migration.split("elsif p_action='status'", 1)[1].lower()
+    assert "v_status in ('paid','partially_paid')" in status_branch
+    assert "payment_required" in status_branch
 
 
 def test_evidence_upload_enforces_ticket_count_and_byte_quotas():
@@ -198,5 +199,6 @@ def test_financial_reports_subtract_non_voided_payments_from_penalties():
     payment_status = migration.split("create or replace function public.tvtms_report_payment_status", 1)[1].split("revoke all on function public.tvtms_report_payment_status", 1)[0]
     aging = migration.split("create or replace function public.tvtms_report_aging", 1)[1].split("revoke all on function public.tvtms_report_aging", 1)[0]
     for function_body in (payment_status, aging):
-        assert "payment_status<>'voided'" in function_body
-        assert "greatest(" in function_body
+        normalized = function_body.lower()
+        assert "payment_status<>'voided'" in normalized
+        assert "greatest(" in normalized

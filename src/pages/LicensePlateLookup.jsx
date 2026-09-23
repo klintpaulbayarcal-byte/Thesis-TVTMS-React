@@ -45,8 +45,8 @@ export default function LicensePlateLookup(){
 
   const openResult=async row=>{setBusy(true);setError('');try{await loadVehicle(row.plate_number);}catch(problem){setError(problem.message);}finally{setBusy(false);}};
   const onQueryChange=event=>{const value=event.target.value;setQuery(mode==='owner'?value:value.toUpperCase());};
-  const resultColumns=[{key:'plate_number',label:'Plate'},{key:'vehicle_type',label:'Type'},{key:'owner_name',label:'Owner'},{key:'driver_license_number',label:'License'},{key:'violation_count',label:'Violations'},{key:'is_repeat_offender',label:'Repeat offender',render:row=>row.is_repeat_offender?<StatusBadge value="repeat offender"/>:'No'}];
-  const historyColumns=[{key:'ticket_number',label:'Ticket'},{key:'violation_name',label:'Violation'},{key:'date_issued',label:'Date Issued',render:row=>dateOnly(row.date_issued)},{key:'location',label:'Location'},{key:'penalty_amount',label:'Penalty',render:row=>money(row.penalty_amount)},{key:'status',label:'Status',render:row=><StatusBadge value={row.status}/>},{key:'remaining_balance',label:'Balance',render:row=>money(row.remaining_balance)}];
+  const resultColumns=[{key:'plate_number',label:'Plate'},{key:'vehicle_type',label:'Type'},{key:'owner_name',label:'Owner'},{key:'driver_license_number',label:'License'},{key:'violation_count',label:'Plate tickets'}];
+  const historyColumns=[{key:'ticket_number',label:'Ticket'},{key:'violation_name',label:'Violation'},{key:'date_issued',label:'Date Issued',render:row=>dateOnly(row.date_issued)},{key:'location',label:'Location'},{key:'penalty_amount',label:'Penalty',render:row=>money(row.penalty_amount)},{key:'status',label:'Status',render:row=><StatusBadge value={row.payment_status??row.status}/>},{key:'remaining_balance',label:'Balance',render:row=>money(row.remaining_balance)}];
 
   return <div className="lookup-container restored-violator-lookup">
     <section className="lookup-section">
@@ -78,7 +78,7 @@ export default function LicensePlateLookup(){
         <div className="info-row"><span className="label">Registered Date:</span><span className="value">{vehicle.registered_date?dateOnly(vehicle.registered_date):'—'}</span></div>
       </div></section>
 
-      <section className="lookup-section"><div className="section-title"><Icon name="analytics"/> Violation Summary {Number(stats?.total_violations??violations.length)>=2&&<StatusBadge value="repeat offender"/>}</div><div className="summary-cards">
+      <section className="lookup-section"><div className="section-title"><Icon name="analytics"/> Plate Ticket Summary</div><div className="summary-cards">
         <div className="summary-card"><div className="card-label">Total Violations</div><div className="card-value">{stats?.total_violations??violations.length}</div></div>
         <div className="summary-card paid"><div className="card-label">Paid Violations</div><div className="card-value">{stats?.paid_count??0}</div></div>
         <div className="summary-card unpaid"><div className="card-label">Unpaid Violations</div><div className="card-value">{stats?.unpaid_count??0}</div></div>

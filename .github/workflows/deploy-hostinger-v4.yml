@@ -1,0 +1,161 @@
+name: Deploy TVTMS React v4 to Hostinger (guarded)
+
+# Every push to sync-v4 deploys only after the guarded verification steps pass.
+on:
+  push:
+    branches: [sync-v4]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tvtms-hostinger-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      FTP_SERVER: ${{ secrets.FTP_SERVER }}
+      FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      TVTMS_TOKEN_SECRET: ${{ secrets.TVTMS_TOKEN_SECRET }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_SECURE: ${{ secrets.SMTP_SECURE }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      SMTP_FROM_EMAIL: ${{ secrets.SMTP_FROM_EMAIL }}
+      SMTP_FROM_NAME: ${{ secrets.SMTP_FROM_NAME }}
+    steps:
+      - name: Check out approved sync-v4 source
+        uses: actions/checkout@v4
+
+      - name: Require exactly the verified FTP destination and configured secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FTP_SERVER" || { echo 'FTP_SERVER secret is missing'; exit 1; }
+          test -n "$FTP_USERNAME" || { echo 'FTP_USERNAME secret is missing'; exit 1; }
+          test -n "$FTP_PASSWORD" || { echo 'FTP_PASSWORD secret is missing'; exit 1; }
+          test -n "$SUPABASE_SECRET_KEY" || { echo 'SUPABASE_SECRET_KEY secret is missing'; exit 1; }
+          test -n "$TVTMS_TOKEN_SECRET" || { echo 'TVTMS_TOKEN_SECRET secret is missing'; exit 1; }
+          test "${#TVTMS_TOKEN_SECRET}" -ge 32 || { echo 'TVTMS_TOKEN_SECRET must contain at least 32 characters'; exit 1; }
+          test -n "$SMTP_HOST" || { echo 'SMTP_HOST secret is missing'; exit 1; }
+          test -n "$SMTP_PORT" || { echo 'SMTP_PORT secret is missing'; exit 1; }
+          test -n "$SMTP_SECURE" || { echo 'SMTP_SECURE secret is missing'; exit 1; }
+          test -n "$SMTP_USERNAME" || { echo 'SMTP_USERNAME secret is missing'; exit 1; }
+          test -n "$SMTP_PASSWORD" || { echo 'SMTP_PASSWORD secret is missing'; exit 1; }
+          test -n "$SMTP_FROM_EMAIL" || { echo 'SMTP_FROM_EMAIL secret is missing'; exit 1; }
+          test -n "$SMTP_FROM_NAME" || { echo 'SMTP_FROM_NAME secret is missing'; exit 1; }
+          [[ "$SMTP_PORT" =~ ^[0-9]+$ ]] && test "$SMTP_PORT" -ge 1 && test "$SMTP_PORT" -le 65535 || { echo 'SMTP_PORT secret is invalid'; exit 1; }
+          [[ "$SMTP_SECURE" = 'tls' || "$SMTP_SECURE" = 'ssl' ]] || { echo 'SMTP_SECURE must be tls or ssl'; exit 1; }
+          [[ "$SMTP_FROM_EMAIL" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || { echo 'SMTP_FROM_EMAIL secret is invalid'; exit 1; }
+          test "$FTP_SERVER" = '145.223.108.219' || { echo 'FTP_SERVER differs from the approved screenshot; stopping'; exit 1; }
+          test "$FTP_USERNAME" = 'u948876618.trafficviolation' || { echo 'FTP_USERNAME differs from the approved subdomain FTP account; stopping'; exit 1; }
+          echo 'Required secret names are populated and destination matches the approved FTP account.'
+
+      - name: Install build/test dependencies and secure FTP client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lftp openssl php-cli >/dev/null
+
+      - name: Preflight Hostinger certificate and remote subdomain root (NO WRITES)
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 20 openssl s_client -connect "$FTP_SERVER:21" -starttls ftp -verify_return_error </dev/null 2>/tmp/tvtms-ftps-certificate.log | openssl x509 -outform PEM >/tmp/tvtms-ftps-peer.pem
+          openssl x509 -in /tmp/tvtms-ftps-peer.pem -noout -ext subjectAltName | tr '[:upper:]' '[:lower:]' | grep -Fq 'dns:*.hstgr.io'
+          # The owner explicitly approved the fixed-IP fallback because the plan hostname is unavailable.
+          # TLS and CA verification remain mandatory; only certificate hostname matching is disabled.
+          options='set cmd:fail-exit yes; set ftp:ssl-force yes; set ftp:ssl-protect-data yes; set ssl:verify-certificate yes; set ssl:check-hostname no; set ftp:passive-mode yes; set net:timeout 15; set net:max-retries 1;'
+          lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER" -e "$options cls -1 /; bye"
+          echo 'CA-verified Hostinger FTPS certificate and account-root login verified against the approved fixed IP. No remote files changed.'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify source and build Hostinger package
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          python -m pip install pytest
+          export TVTMS_PYTHON="$(python -c 'import sys; print(sys.executable)')"
+          export TVTMS_PHP="$(command -v php)"
+          npm run verify:jsx
+          find api -type f -name '*.php' -print0 | xargs -0 -r -n1 php -l
+          npm run build:hostinger
+          npm test
+          test -f deploy/index.html
+          test -f deploy/api/index.php
+          test -f deploy/.htaccess
+          test -f deploy/api/.htaccess
+          test ! -e deploy/uploads
+          test ! -e deploy/api/config/config.local.php
+          test ! -e deploy/.env
+          test ! -e deploy/.env.local
+
+      - name: Create private production API config from GitHub Secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          php scripts/render-production-config.php deploy/api/config/config.local.php
+          php -l deploy/api/config/config.local.php
+          echo 'Private production API config created without printing secret values.'
+
+      - name: Upload verified build and private config (NO DELETE, uploads excluded)
+        shell: bash
+        run: |
+          set -euo pipefail
+          options='set cmd:fail-exit yes; set ftp:ssl-force yes; set ftp:ssl-protect-data yes; set ssl:verify-certificate yes; set ssl:check-hostname no; set ftp:passive-mode yes; set net:timeout 20; set net:max-retries 2;'
+          # lftp mirror -R does not delete remote files without --delete.
+          # Runtime uploads are never packaged or changed by this release.
+          # Upload Apache policy files explicitly; --all belongs to cls, not mirror.
+          lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER" -e "$options mirror -R --verbose --no-perms --parallel=2 --exclude-glob uploads/ ./deploy/ /; put ./deploy/.htaccess -o /.htaccess; put ./deploy/api/.htaccess -o /api/.htaccess; put ./deploy/api/config/.htaccess -o /api/config/.htaccess; cls -1 /index.html; cls -1 /.htaccess; cls -1 /api/index.php; cls -1 /api/config/config.local.php; bye"
+          echo 'FTP upload finished; verifying live site next.'
+
+      - name: Verify the exact legacy redirect before cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          legacy_result="$(curl --silent --show-error --max-time 30 --output /dev/null --write-out '%{http_code} %{redirect_url}' 'https://trafficviolation.dcsbisu.com/pages/landing.html')"
+          test "$legacy_result" = '301 https://trafficviolation.dcsbisu.com/' || { echo "Unexpected legacy response: $legacy_result"; exit 1; }
+          echo 'Legacy landing URL redirects to the React homepage before obsolete-file cleanup.'
+
+      - name: Remove only the obsolete deployed landing file
+        shell: bash
+        run: |
+          set -euo pipefail
+          options='set cmd:fail-exit yes; set ftp:ssl-force yes; set ftp:ssl-protect-data yes; set ssl:verify-certificate yes; set ssl:check-hostname no; set ftp:passive-mode yes; set net:timeout 20; set net:max-retries 2;'
+          remote_pages="$(lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER" -e "$options rm -f /pages/landing.html; cls -1 /pages; bye")"
+          if grep -Fxq 'landing.html' <<<"$remote_pages"; then
+            echo 'Obsolete /pages/landing.html still exists after exact-file removal.'
+            exit 1
+          fi
+          echo 'Removed only /pages/landing.html; no directory or wildcard deletion was used.'
+
+      - name: Check production website and API health
+        shell: bash
+        run: |
+          set -euo pipefail
+          legacy_result="$(curl --silent --show-error --max-time 30 --output /dev/null --write-out '%{http_code} %{redirect_url}' 'https://trafficviolation.dcsbisu.com/pages/landing.html')"
+          test "$legacy_result" = '301 https://trafficviolation.dcsbisu.com/' || { echo "Unexpected legacy response after cleanup: $legacy_result"; exit 1; }
+          curl --fail --silent --show-error --location --max-time 30 'https://trafficviolation.dcsbisu.com/' -o /tmp/tvtms-live-index.html
+          grep -q 'assets/' /tmp/tvtms-live-index.html
+          curl --fail --silent --show-error --location --max-time 30 'https://trafficviolation.dcsbisu.com/api/health' -o /tmp/tvtms-health.json
+          php -r '$x=json_decode(file_get_contents("/tmp/tvtms-health.json"),true); exit(is_array($x)&&($x["success"]??false)===true&&($x["database"]??"")==="connected"?0:1);'
+          echo 'Live homepage and Supabase-connected PHP API health verified.'

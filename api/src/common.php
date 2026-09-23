@@ -17,7 +17,11 @@ function app_config(): array
     return $config;
 }
 
+require_once __DIR__ . '/mail.php';
+
 require_once __DIR__ . '/supabase.php';
+require_once __DIR__ . '/ticket_email.php';
+require_once __DIR__ . '/dispute_verification.php';
 
 function json_input(): array
 {
@@ -112,25 +116,22 @@ function rpc_domain_error(mixed $result): ?array
 {
     if(!is_array($result))return null;
     if(isset($result['error'])&&is_array($result['error'])) return $result['error'];
-    if(isset($result['errorCode'])) return ['message'=>$result['message']??'Operation rejected.','statusCode'=>(int)($result['statusCode']??400),'errorCode'=>$result['errorCode']];
+    if(isset($result['errorCode'])){
+        $error=['message'=>$result['message']??'Operation rejected.','statusCode'=>(int)($result['statusCode']??400),'errorCode'=>$result['errorCode']];
+        if(isset($result['retryAfter']))$error['retryAfter']=(int)$result['retryAfter'];
+        if(isset($result['attemptsRemaining']))$error['attemptsRemaining']=(int)$result['attemptsRemaining'];
+        return $error;
+    }
     return null;
 }
 function fail_domain(array $error): never
 {
-    fail((string)($error['message']??'Operation rejected.'),(int)($error['statusCode']??$error['status']??400),(string)($error['errorCode']??'DOMAIN_ERROR'));
+    $extra=[];
+    $retryAfter=(int)($error['retryAfter']??0);
+    if($retryAfter>0){header('Retry-After: '.(string)$retryAfter);$extra['retryAfter']=$retryAfter;}
+    if(isset($error['attemptsRemaining']))$extra['attemptsRemaining']=(int)$error['attemptsRemaining'];
+    fail((string)($error['message']??'Operation rejected.'),(int)($error['statusCode']??$error['status']??400),(string)($error['errorCode']??'DOMAIN_ERROR'),$extra);
 }
-
-function smtp_read_response($socket): string{$response='';while(($line=fgets($socket,515))!==false){$response.=$line;if(strlen($line)<4||$line[3]===' ')break;}return $response;}
-function smtp_expect($socket,array $codes): string{$response=smtp_read_response($socket);$code=(int)substr($response,0,3);if(!in_array($code,$codes,true))throw new RuntimeException('SMTP server rejected the request ('.$code.').');return $response;}
-function smtp_command($socket,string $command,array $codes): string{fwrite($socket,$command."\r\n");return smtp_expect($socket,$codes);}
-function smtp_send_message(array $smtp,string $to,string $subject,string $html): bool
-{
-    $host=trim((string)($smtp['host']??''));$port=(int)($smtp['port']??587);$secure=strtolower(trim((string)($smtp['secure']??'tls')));$user=(string)($smtp['username']??'');$pass=(string)($smtp['password']??'');$from=trim((string)($smtp['from_email']??$user));$fromName=trim((string)($smtp['from_name']??'TVTMS'));
-    if(!$host||!filter_var($to,FILTER_VALIDATE_EMAIL)||!filter_var($from,FILTER_VALIDATE_EMAIL))return false;
-    $remote=($secure==='ssl'?'ssl://':'').$host;$errno=0;$errstr='';$socket=@fsockopen($remote,$port,$errno,$errstr,12);if(!$socket)return false;stream_set_timeout($socket,12);
-    try{smtp_expect($socket,[220]);$ehlo=$_SERVER['SERVER_NAME']??'localhost';smtp_command($socket,'EHLO '.$ehlo,[250]);if($secure==='tls'){smtp_command($socket,'STARTTLS',[220]);if(!stream_socket_enable_crypto($socket,true,STREAM_CRYPTO_METHOD_TLS_CLIENT))throw new RuntimeException('Unable to establish SMTP TLS.');smtp_command($socket,'EHLO '.$ehlo,[250]);}if($user!==''){smtp_command($socket,'AUTH LOGIN',[334]);smtp_command($socket,base64_encode($user),[334]);smtp_command($socket,base64_encode($pass),[235]);}smtp_command($socket,'MAIL FROM:<'.$from.'>',[250]);smtp_command($socket,'RCPT TO:<'.$to.'>',[250,251]);smtp_command($socket,'DATA',[354]);$encodedSubject='=?UTF-8?B?'.base64_encode($subject).'?=';$safeName=str_replace(["\r","\n",'"'],'',$fromName);$body=preg_replace('/^\./m','..',$html)??$html;$message="Date: ".date(DATE_RFC2822)."\r\nFrom: \"{$safeName}\" <{$from}>\r\nTo: <{$to}>\r\nSubject: {$encodedSubject}\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n{$body}\r\n.";fwrite($socket,$message."\r\n");smtp_expect($socket,[250]);smtp_command($socket,'QUIT',[221]);fclose($socket);return true;}catch(Throwable $e){error_log('SMTP send failed: '.$e->getMessage());if(is_resource($socket))fclose($socket);return false;}
-}
-function send_basic_email(string $to,string $subject,string $html): bool{$smtp=app_config()['smtp']??[];if(empty($smtp['enabled'])||!filter_var($to,FILTER_VALIDATE_EMAIL))return false;if(trim((string)($smtp['host']??''))!=='')return smtp_send_message($smtp,$to,$subject,$html);$from=trim((string)($smtp['from_email']??''));if(!filter_var($from,FILTER_VALIDATE_EMAIL))return false;$headers=['MIME-Version: 1.0','Content-Type: text/html; charset=UTF-8','From: '.($smtp['from_name']??'TVTMS').' <'.$from.'>'];return @mail($to,$subject,$html,implode("\r\n",$headers));}
 
 function rate_limit_check(string $bucket,int $max,int $windowSeconds,?string $ip=null,?int $now=null,?string $directory=null): array
 {
