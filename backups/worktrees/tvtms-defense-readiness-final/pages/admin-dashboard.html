@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Admin Dashboard - Municipal Traffic Violation Ticketing and Management System</title>
+    <link rel="stylesheet" href="../assets/css/style.css?v=20260806">
+    <link rel="stylesheet" href="../assets/css/dashboard.css?v=20260811m1">
+    <link rel="stylesheet" href="../assets/css/admin-dashboard-map.css?v=20260812a">
+    <link rel="stylesheet" href="../assets/css/professional-theme.css?v=20260809a">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Manrope:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body class="admin-map-dashboard">
+    <div id="alertContainer"></div>
+
+    <div class="dashboard-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <img src="images/calape-logo.webp" alt="Municipality of Calape logo" style="width:40px;height:40px;object-fit:contain;" data-page-event-1><div style="display:none;width:40px;height:40px;align-items:center;justify-content:center;font-size:20px;background:rgba(255,255,255,0.1);border-radius:8px;"><i class="fas fa-motorcycle" aria-hidden="true"></i></div>
+                    <div class="sidebar-logo-text">
+                        <h3>Municipal Traffic Violation</h3>
+                        <p>Ticketing &amp; Management System</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar"></div>
+                    <div class="user-details">
+                        <h4 class="user-name">Admin</h4>
+                        <p class="user-role">Administrator</p>
+                    </div>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-section-title">MAIN</div>
+                <a href="admin-dashboard.html" class="nav-item active">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="admin-overview.html" class="nav-item">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Overview</span>
+                </a>
+                <div class="nav-section-title">ENFORCEMENT</div>
+                <a href="issue-ticket.html" class="nav-item">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>Issue Ticket</span>
+                </a>
+                <a href="view-tickets.html" class="nav-item">
+                    <i class="fas fa-ticket-alt"></i>
+                    <span>All Tickets</span>
+                </a>
+                <a href="license-plate-lookup.html" class="nav-item">
+                    <i class="fas fa-search"></i>
+                    <span>Search Violator</span>
+                </a>
+                <div class="nav-section-title">MANAGEMENT</div>
+                <a href="manage-violations.html" class="nav-item">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Violations</span>
+                </a>
+                <a href="manage-users.html" class="nav-item">
+                    <i class="fas fa-users"></i>
+                    <span>Users</span>
+                </a>
+                <a href="payments.html" class="nav-item">
+                    <i class="fas fa-money-bill-wave"></i>
+                    <span>Payments</span>
+                </a>
+                <a href="disputes.html" class="nav-item">
+                    <i class="fas fa-balance-scale"></i>
+                    <span>Disputes</span>
+                </a>
+                <div class="nav-section-title">ANALYTICS</div>
+                <a href="reports.html" class="nav-item">
+                    <i class="fas fa-file-alt"></i>
+                    <span>Reports</span>
+                </a>
+                <a href="analytics-dashboard.html" class="nav-item">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Analytics</span>
+                </a>
+                <div class="nav-section-title">ADMIN TOOLS</div>
+                <a href="audit-logs.html" class="nav-item">
+                    <i class="fas fa-history"></i>
+                    <span>Audit Trail</span>
+                </a>
+                <a href="notifications.html" class="nav-item">
+                    <i class="fas fa-bell"></i>
+                    <span>Notifications</span>
+                </a>
+                <a href="admin-settings.html" class="nav-item">
+                    <i class="fas fa-cog"></i>
+                    <span>Settings</span>
+                </a>
+                <div class="nav-section-title">ACCOUNT</div>
+                <a href="profile.html" class="nav-item">
+                    <i class="fas fa-id-card"></i>
+                    <span>Profile</span>
+                </a>
+                <a href="#" data-page-event-2 class="nav-item">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Topbar -->
+            <div class="topbar">
+                <div class="topbar-left">
+                    <button type="button" class="menu-toggle" aria-label="Toggle navigation menu" aria-expanded="false">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h2>Dashboard</h2>
+                </div>
+            </div>
+
+            <!-- Dashboard Content -->
+            <div class="dashboard-content">
+                <section class="map-hero">
+                    <div class="map-head">
+                        <div>
+                            <p class="section-kicker">Operations View</p>
+                            <h3>Calape Risk by Area</h3>
+                        </div>
+                        <a href="license-plate-lookup.html" class="btn btn-primary btn-sm">Live Plate Lookup</a>
+                    </div>
+                    <div class="map-canvas">
+                        <div class="map-grid-overlay"></div>
+                        <div class="skyline-axis-labels">
+                            <span>High</span>
+                            <span>Medium</span>
+                            <span>Low</span>
+                        </div>
+                        <div id="barangayRiskSkyline" class="risk-skyline" aria-label="Barangay risk levels">
+                            <div class="risk-loading-state">
+                                <div class="spinner"></div>
+                                <p>Loading barangay risk levels...</p>
+                            </div>
+                        </div>
+                        <div class="intervention-ribbon" aria-hidden="true">
+                            <span id="barangayRiskSummary">Identifying the barangay with the most violations...</span>
+                        </div>
+                    </div>
+                    <div class="map-meta-row">
+                        <div class="map-meta">
+                            <span class="dot high"></span>
+                            High Risk Zone
+                        </div>
+                        <div class="map-meta">
+                            <span class="dot medium"></span>
+                            Medium Risk Zone
+                        </div>
+                        <div class="map-meta">
+                            <span class="dot low"></span>
+                            Patrol Cleared
+                        </div>
+                    </div>
+                </section>
+
+                
+                <!-- Admin Premium Welcome Card -->
+                <div id="adminWelcomeCard" style="
+                    background: linear-gradient(135deg, #0b2545 0%, #1e3a5f 60%, #134074 100%);
+                    border-radius: 20px; padding: 28px 32px; margin-bottom: 24px;
+                    color: white; display: flex; align-items: center;
+                    justify-content: space-between; flex-wrap: wrap; gap: 16px;
+                    position: relative; overflow: hidden;
+                    box-shadow: 0 8px 32px rgba(11,37,69,0.3);
+                ">
+                    <div style="position:absolute;top:-40px;right:-40px;width:200px;height:200px;
+                        border-radius:50%;background:rgba(255,255,255,0.03);pointer-events:none"></div>
+                    <div style="position:relative;z-index:1">
+                        <div style="font-size:11px;font-weight:700;letter-spacing:1.2px;
+                            text-transform:uppercase;color:rgba(255,255,255,0.5);margin-bottom:8px">
+                            <i class="fas fa-shield-halved" aria-hidden="true"></i> System Administrator
+                        </div>
+                        <h2 id="welcomeAdminName" style="font-family:'Barlow Condensed',sans-serif;
+                            font-size:28px;font-weight:800;margin:0 0 6px;line-height:1">
+                            Admin Dashboard
+                        </h2>
+                        <p id="adminWelcomeDate" style="font-size:13px;color:rgba(255,255,255,0.6);margin:0">
+                            Municipal Traffic Violation Ticketing and Management System
+                        </p>
+                    </div>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;position:relative;z-index:1">
+                        <a href="reports.html" style="
+                            display:inline-flex;align-items:center;gap:6px;
+                            padding:10px 18px;border-radius:9px;
+                            background:rgba(255,255,255,0.12);color:white;
+                            border:1px solid rgba(255,255,255,0.2);
+                            font-size:12px;font-weight:700;text-decoration:none;transition:all 0.2s;
+                        " data-page-event-3
+                           data-page-event-4>
+                            <i class="fas fa-file-alt"></i> Reports
+                        </a>
+                        <a href="analytics-dashboard.html" style="
+                            display:inline-flex;align-items:center;gap:6px;
+                            padding:10px 18px;border-radius:9px;
+                            background:rgba(255,255,255,0.12);color:white;
+                            border:1px solid rgba(255,255,255,0.2);
+                            font-size:12px;font-weight:700;text-decoration:none;transition:all 0.2s;
+                        " data-page-event-5
+                           data-page-event-6>
+                            <i class="fas fa-chart-bar"></i> Analytics
+                        </a>
+                        <a href="audit-logs.html" style="
+                            display:inline-flex;align-items:center;gap:6px;
+                            padding:10px 18px;border-radius:9px;
+                            background:white;color:#0b2545;
+                            font-size:12px;font-weight:700;text-decoration:none;
+                            box-shadow:0 4px 12px rgba(0,0,0,0.15);transition:all 0.2s;
+                        " data-page-event-7
+                           data-page-event-8>
+                            <i class="fas fa-history"></i> Audit Trail
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Stats Grid Begins -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon">
+                                <i class="fas fa-ticket-alt"></i>
+                            </div>
+                        </div>
+                        <div class="stat-label">Total Tickets</div>
+                        <h2 class="stat-value" id="totalTickets">0</h2>
+                        <div class="stat-footer">
+                            <i class="fas fa-calendar"></i> All time
+                        </div>
+                    </div>
+
+                    <div class="stat-card success">
+                        <div class="stat-header">
+                            <div class="stat-icon">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                        </div>
+                        <div class="stat-label">Paid Tickets</div>
+                        <h2 class="stat-value" id="paidTickets">0</h2>
+                        <div class="stat-footer">
+                            <i class="fas fa-money-bill-wave"></i> Collected
+                        </div>
+                    </div>
+
+                    <div class="stat-card danger">
+                        <div class="stat-header">
+                            <div class="stat-icon">
+                                <i class="fas fa-exclamation-circle"></i>
+                            </div>
+                        </div>
+                        <div class="stat-label">Unpaid Tickets</div>
+                        <h2 class="stat-value" id="unpaidTickets">0</h2>
+                        <div class="stat-footer">
+                            <i class="fas fa-hourglass-half"></i> Pending
+                        </div>
+                    </div>
+
+                    <div class="stat-card warning">
+                        <div class="stat-header">
+                            <div class="stat-icon">
+                                <i class="fas fa-peso-sign"></i>
+                            </div>
+                        </div>
+                        <div class="stat-label">Total Revenue</div>
+                        <h2 class="stat-value" id="totalRevenue">₱0.00</h2>
+                        <div class="stat-footer">
+                            <i class="fas fa-chart-line"></i> Collected fines
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Feature 7: Admin Executive Summary -->
+                <section class="card" id="execSummaryCard" style="margin-bottom: 24px;">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-clipboard-list" style="color:#0b2545;"></i> Executive Summary</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="execSummaryList" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;">
+                            <div class="spinner" style="margin: 10px auto;"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Feature 6: Admin Action Center -->
+                <section class="card" id="actionCenterCard" style="margin-bottom: 24px;">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-bell" style="color:#c0392b;"></i> Action Required</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="actionCenterList" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px;">
+                            <div class="spinner" style="margin: 10px auto;"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <div class="bento-grid">
+                    <section class="card bento-panel panel-tickets">
+                        <div class="card-header">
+                            <div class="bento-head">
+                                <h3 class="card-title">Recent Violation Tickets</h3>
+                                <a href="view-tickets.html" class="btn btn-primary btn-sm">View All</a>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-container">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Ticket #</th>
+                                            <th>Date</th>
+                                            <th>Plate Number</th>
+                                            <th>Violation</th>
+                                            <th>Penalty</th>
+                                            <th>Status</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="recentTicketsBody">
+                                        <tr>
+                                            <td colspan="7" class="text-center">
+                                                <div class="spinner"></div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="card bento-panel panel-hotspots">
+                        <div class="card-header">
+                            <h3 class="card-title">Top Hotspot Violations</h3>
+                        </div>
+                        <div class="card-body">
+                            <div id="hotspotList" class="hotspot-list">
+                                <div class="hotspot-item">
+                                    <div class="hotspot-row"><span>Loading...</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="card bento-panel panel-actions">
+                        <div class="card-header">
+                            <h3 class="card-title">Quick Actions</h3>
+                        </div>
+                        <div class="card-body action-pill-grid">
+                            <a href="issue-ticket.html" class="action-pill"><i class="fas fa-plus"></i><span>Issue
+                                    Ticket</span></a>
+                            <a href="analytics-dashboard.html" class="action-pill"><i
+                                    class="fas fa-chart-bar"></i><span>Analytics</span></a>
+                            <a href="reports.html" class="action-pill"><i
+                                    class="fas fa-file-alt"></i><span>Reports</span></a>
+                            <a href="payments.html" class="action-pill"><i
+                                    class="fas fa-receipt"></i><span>Payments</span></a>
+                            <a href="disputes.html" class="action-pill"><i
+                                    class="fas fa-balance-scale"></i><span>Disputes</span></a>
+                            <a href="notifications.html" class="action-pill"><i
+                                    class="fas fa-bell"></i><span>Alerts</span></a>
+                        </div>
+                    </section>
+
+                    <section class="card bento-panel panel-system">
+                        <div class="card-header">
+                            <h3 class="card-title">System</h3>
+                        </div>
+                        <div class="card-body system-summary">
+                            <p><strong>Version:</strong> 1.0.0</p>
+                            <a href="admin-settings.html#about-system" class="btn btn-secondary btn-sm">
+                                <i class="fas fa-circle-info" aria-hidden="true"></i> About System
+                            </a>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Sidebar Overlay for Mobile -->
+    <div class="sidebar-overlay"></div>
+
+    <script src="../app-config.js"></script>
+    <script src="../assets/js/api.js?v=20260427c"></script>
+    <script src="../assets/js/main.js?v=20260811m1"></script>
+    <script src="../assets/js/dashboard.js?v=20260427c"></script>
+    <script src="../assets/js/admin-dashboard-page-1.js"></script>
+    <script src="../assets/js/toast.js"></script>
+
+    <script src="../assets/js/admin-dashboard-page-2.js"></script>
+
+    <script src="../assets/js/admin-dashboard-page-3.js"></script>
+
+    <script src="../assets/js/admin-dashboard-page-4.js"></script>
+
+</body>
+
+</html>
