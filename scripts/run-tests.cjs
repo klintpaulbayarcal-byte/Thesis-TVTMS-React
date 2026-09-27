@@ -22,8 +22,12 @@ const pythonCandidates = [
   process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Python', 'bin', 'python.exe'),
 ].filter(Boolean);
 const python = pythonCandidates.find(candidate => fs.existsSync(candidate)) || 'python';
-const env = {...process.env, TVTMS_PHP: php, PATH: `${path.dirname(php)}${path.delimiter}${process.env.PATH || ''}`};
-const result = spawnSync(python, ['-m', 'pytest', '-q', '-s', '-p', 'no:cacheprovider', 'tests'], {cwd: root, env, stdio: 'inherit'});
+// Keep test temp files in the writable project instead of the Windows user temp folder.
+const tempRoot = path.join(root, '.test-tmp');
+fs.mkdirSync(tempRoot, {recursive: true});
+const runTemp = fs.mkdtempSync(path.join(tempRoot, 'run-'));
+const env = {...process.env, TEMP: runTemp, TMP: runTemp, TMPDIR: runTemp, TVTMS_PHP: php, PATH: `${path.dirname(php)}${path.delimiter}${process.env.PATH || ''}`};
+const result = spawnSync(python, ['-m', 'pytest', '-q', '-s', '-p', 'no:cacheprovider', '--basetemp', path.join(runTemp, 'pytest'), 'tests'], {cwd: root, env, stdio: 'inherit'});
 if (result.error) {
   console.error(`Unable to launch Python: ${result.error.message}`);
   process.exit(1);
