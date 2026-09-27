@@ -4,6 +4,7 @@ import { API } from '../services/api';
 import Notice from '../components/Notice';
 import StatusBadge from '../components/StatusBadge';
 import { money, dateOnly } from '../utils/format';
+import { canFilePublicDispute } from '../utils/publicDispute';
 
 export default function PublicTicketLookup(){
   const [searchParams]=useSearchParams();
@@ -22,13 +23,10 @@ export default function PublicTicketLookup(){
   const [selected,setSelected]=useState(null);
   const [reason,setReason]=useState('');
   const [disputeNotice,setDisputeNotice]=useState({type:'',text:''});
-  const [verificationStatus,setVerificationStatus]=useState('idle');
-  const [challengeToken,setChallengeToken]=useState('');
-  const [verificationCode,setVerificationCode]=useState('');
-  const [notificationEmailMasked,setNotificationEmailMasked]=useState('');
+  const [disputeSubmitting,setDisputeSubmitting]=useState(false);
   const normalizedQuery=useMemo(()=>query.toUpperCase(),[query]);
 
-  const resetDispute=(clearSelection=true)=>{if(clearSelection)setSelected(null);setReason('');setDisputeNotice({type:'',text:''});setVerificationStatus('idle');setChallengeToken('');setVerificationCode('');setNotificationEmailMasked('');};
+  const resetDispute=(clearSelection=true)=>{if(clearSelection)setSelected(null);setReason('');setDisputeNotice({type:'',text:''});};
 
   const switchMode=(next)=>{setMode(next);setQuery('');setTickets([]);setSummary(null);resetDispute();setNotice({type:'',text:''});};
 
@@ -72,46 +70,27 @@ export default function PublicTicketLookup(){
   },[referenceFromUrl,modeFromUrl]);
 
   const openDispute=ticket=>{
-    if(!ticket.dispute_eligible||!ticket.has_notification_email)return;
+    if(!canFilePublicDispute(ticket)||disputeSubmitting)return;
     resetDispute(false);setSelected(ticket);
     setTimeout(()=>document.getElementById('publicDisputeSection')?.scrollIntoView({behavior:'smooth',block:'center'}),0);
   };
-  const requestVerification=async()=>{
-    if(!selected?.dispute_eligible||!selected?.has_notification_email){setDisputeNotice({type:'error',text:'This ticket has no notification email available for verification.'});return;}
-    setVerificationStatus('requesting');setChallengeToken('');setVerificationCode('');setDisputeNotice({type:'',text:''});
-    try{
-      const response=await API.publicDisputeRequestCode(selected.ticket_number);
-      setChallengeToken(response.challengeToken||'');
-      setNotificationEmailMasked(response.notificationEmailMasked||'');
-      setVerificationStatus('code_sent');
-      setDisputeNotice({type:'info',text:`A six-digit verification code was sent to ${response.notificationEmailMasked||'the recorded notification email'}.`});
-    }catch(error){setVerificationStatus('idle');setDisputeNotice({type:'error',text:error.message||'Unable to send a verification code. Please try again.'});}
-  };
-  const verifyCode=async()=>{
-    if(!selected||!challengeToken||!/^[0-9]{6}$/.test(verificationCode)){setDisputeNotice({type:'error',text:'Enter the six-digit verification code.'});return;}
-    setVerificationStatus('verifying');setDisputeNotice({type:'',text:''});
-    try{
-      const response=await API.publicDisputeVerifyCode({ticketNumber:selected.ticket_number,challengeToken,code:verificationCode});
-      if(!response.verified)throw new Error('The verification code could not be confirmed.');
-      setVerificationCode('');setVerificationStatus('verified');setDisputeNotice({type:'success',text:'Email verified. You may now enter and submit your dispute reason.'});
-    }catch(error){setVerificationStatus('code_sent');setDisputeNotice({type:'error',text:error.message||'Unable to verify the code. Please try again.'});}
-  };
   const dispute=async event=>{
     event.preventDefault();
-    if(verificationStatus==='submitting')return;
-    if(!selected||!selected.dispute_eligible){setDisputeNotice({type:'error',text:'Select an eligible ticket before submitting a dispute.'});return;}
-    if(verificationStatus!=='verified'||!challengeToken||reason.trim().length<10){setDisputeNotice({type:'error',text:'Verify the notification email and enter a reason of at least 10 characters.'});return;}
-    setVerificationStatus('submitting');setDisputeNotice({type:'',text:''});
+    if(disputeSubmitting)return;
+    if(!canFilePublicDispute(selected)){setDisputeNotice({type:'error',text:'Select an eligible ticket before submitting a dispute.'});return;}
+    if(reason.trim().length<10||reason.trim().length>4000){setDisputeNotice({type:'error',text:'Enter a dispute reason of 10–4000 characters.'});return;}
+    setDisputeSubmitting(true);setDisputeNotice({type:'',text:''});
     try{
-      await API.publicDispute({ticketNumber:selected.ticket_number,challengeToken,reason:reason.trim()});
-      setVerificationStatus('submitted');setChallengeToken('');setVerificationCode('');setSelected(null);setReason('');
+      await API.publicDispute({ticketNumber:selected.ticket_number,plateNumber:selected.plate_number,reason:reason.trim()});
+      setSelected(null);setReason('');
       setDisputeNotice({type:'success',text:'Your dispute was submitted successfully for administrator review. The ticket list will update shortly.'});
       const filters=mode==='plate'?{plateNumber:normalizedQuery}:{ticketNumber:normalizedQuery};
       try{
         const refreshed=await API.publicTicketLookup(filters);
         setTickets(Array.isArray(refreshed.tickets)?refreshed.tickets:(Array.isArray(refreshed.data)?refreshed.data:[]));
       }catch{/* Keep the successful submission confirmation even if refreshing fails. */}
-    }catch(error){setVerificationStatus('verified');setDisputeNotice({type:'error',text:error.message||'Unable to submit the dispute. Please try again.'});}
+    }catch(error){setDisputeNotice({type:'error',text:error.message||'Unable to submit the dispute. Please try again.'});}
+    finally{setDisputeSubmitting(false);}
   };
 
   return <main className="public-lookup-page">
@@ -161,22 +140,19 @@ export default function PublicTicketLookup(){
             <div><dt>Violation</dt><dd>{ticket.violation_name||'—'}</dd></div><div><dt>Penalty</dt><dd>{money(ticket.penalty_amount)}</dd></div>
             <div><dt>Paid</dt><dd>{money(ticket.total_paid)}</dd></div><div><dt>Balance</dt><dd>{money(ticket.remaining_balance)}</dd></div>
           </dl>
-          {ticket.dispute_eligible&&ticket.has_notification_email?<button type="button" className="dispute-trigger" onClick={()=>openDispute(ticket)}>File a Dispute</button>:<div className="dispute-ineligible"><strong>Dispute unavailable for this ticket.</strong><Notice type="info">{ticket.has_notification_email?ticket.dispute_message:'No notification email is recorded for verification.'}</Notice><p>If you need clarification, please contact the issuing office.</p></div>}
+          {canFilePublicDispute(ticket)?<button type="button" className="dispute-trigger" disabled={disputeSubmitting} onClick={()=>openDispute(ticket)}>File a Dispute</button>:<div className="dispute-ineligible"><strong>Dispute unavailable for this ticket.</strong><Notice type="info">{ticket.dispute_message||'This ticket is not eligible for a dispute.'}</Notice><p>If you need clarification, please contact the issuing office.</p></div>}
         </article>)}
       </section>
 
       <section id="publicDisputeSection" className="dispute-wrap" aria-live="polite">
         <div className="dispute-card">
           <div className="dispute-title">⚖ File a Dispute</div>
-          <div className="dispute-desc">Choose an eligible ticket above, verify the masked notification email with a six-digit code, then explain your reason.</div>
+          <div className="dispute-desc">Choose an eligible ticket and explain your reason. Tickets with any recorded payment cannot be disputed. Disputes are submitted for administrator review.</div>
           <Notice type={disputeNotice.type}>{disputeNotice.text}</Notice>
           {selected?<form className="dispute-form" onSubmit={dispute}>
             <div className="selected-ticket-summary">Selected ticket: <strong>{selected.ticket_number}</strong> · {selected.violation_name}</div>
-            {notificationEmailMasked&&<div className="field"><label>Notification Email</label><div>{notificationEmailMasked}</div></div>}
-            {verificationStatus!=='verified'&&verificationStatus!=='submitting'&&<div className="field"><button type="button" className="dispute-trigger" disabled={verificationStatus==='requesting'||verificationStatus==='verifying'} onClick={requestVerification}>{verificationStatus==='requesting'?'Sending code…':challengeToken?'Resend Code':'Send Verification Code'}</button></div>}
-            {(verificationStatus==='code_sent'||verificationStatus==='verifying')&&<div className="field"><label htmlFor="disputeCode">Verification Code *</label><input id="disputeCode" inputMode="numeric" pattern="[0-9]{6}" minLength="6" maxLength="6" required disabled={verificationStatus==='verifying'} value={verificationCode} onChange={e=>setVerificationCode(e.target.value.replace(/\D/g,'').slice(0,6))} autoComplete="one-time-code" placeholder="6-digit code"/><button type="button" className="dispute-trigger" disabled={verificationStatus==='verifying'||verificationCode.length!==6} onClick={verifyCode}>{verificationStatus==='verifying'?'Verifying…':'Verify Code'}</button></div>}
-            <div className="field"><label htmlFor="disputeReason">Reason for Dispute *</label><textarea id="disputeReason" rows="4" minLength="10" maxLength="4000" required disabled={verificationStatus!=='verified'} value={reason} onChange={e=>setReason(e.target.value)} placeholder="Explain why you believe this ticket should be disputed (at least 10 characters)." /></div>
-            <button type="submit" className="dispute-submit" disabled={verificationStatus!=='verified'||reason.trim().length<10}>{verificationStatus==='submitting'?'Submitting…':'Submit Dispute'}</button>
+            <div className="field"><label htmlFor="disputeReason">Reason for Dispute *</label><textarea id="disputeReason" rows="4" minLength="10" maxLength="4000" required disabled={disputeSubmitting} value={reason} onChange={e=>setReason(e.target.value)} placeholder="Explain why you believe this ticket should be disputed (at least 10 characters)." /></div>
+            <button type="submit" className="dispute-submit" disabled={disputeSubmitting||reason.trim().length<10||reason.trim().length>4000}>{disputeSubmitting?'Submitting…':'Submit Dispute'}</button>
           </form>:<div className="selected-ticket-summary"><strong>No ticket selected.</strong> Select an eligible ticket above to open the dispute form. If a ticket says the dispute period has ended, the online form is unavailable for that ticket.</div>}
         </div>
       </section>

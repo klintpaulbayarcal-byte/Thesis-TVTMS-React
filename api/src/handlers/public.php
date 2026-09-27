@@ -1,17 +1,33 @@
 <?php
 declare(strict_types=1);
 
+function public_dispute_eligibility_message(array $ticket,?DateTimeImmutable $today=null): string
+{
+    if(!empty($ticket['has_recorded_payment'])||(float)($ticket['total_paid']??0)>0)return 'Tickets with any recorded payment cannot be disputed.';
+    if(($ticket['status']??'')!=='unpaid')return 'Only unpaid tickets can be disputed.';
+    if((int)($ticket['has_open_dispute']??0)===1)return 'A dispute is already open for this ticket.';
+    $zone=new DateTimeZone('Asia/Manila');
+    $today=($today??new DateTimeImmutable('now',$zone))->setTimezone($zone)->setTime(0,0);
+    $issued=DateTimeImmutable::createFromFormat('!Y-m-d',(string)($ticket['date_issued']??''),$zone);
+    $dateErrors=DateTimeImmutable::getLastErrors();
+    if(!$issued||($dateErrors&&($dateErrors['warning_count']||$dateErrors['error_count'])))return 'Dispute eligibility could not be confirmed. Please contact the issuing office.';
+    $deadline=(int)($ticket['dispute_deadline_days']??15);
+    $age=(int)$issued->diff($today)->format('%r%a');
+    return $age>$deadline?'The '.$deadline.'-day dispute period has ended.':'';
+}
+
 function public_ticket_lookup(array $params=[]): never
 {
     $plate=normalize_plate($_GET['plate_number']??$_GET['plateNumber']??$_GET['plate']??'');$ticket=strtoupper(trim((string)($_GET['ticket_number']??$_GET['ticketNumber']??$_GET['ticket']??'')));
     if($plate===''&&$ticket==='')fail('Plate number or ticket number is required.',400,'VALIDATION_ERROR');
     $rows=supabase_rpc('tvtms_public_lookup',['p_plate'=>$plate?:null,'p_ticket'=>$ticket?:null]);$tickets=is_array($rows)?$rows:[];
     foreach($tickets as &$t){
-        $deadline=(int)($t['dispute_deadline_days']??15);$age=(int)($t['dispute_age_days']??0);$open=(int)($t['has_open_dispute']??0)===1;$msg='';if(($t['status']??'')!=='unpaid')$msg='Only unpaid tickets can be disputed.';elseif($open)$msg='A dispute is already open for this ticket.';elseif($age>$deadline)$msg='The '.$deadline.'-day dispute period has ended.';
+        $msg=public_dispute_eligibility_message($t);
         $t=['ticket_number'=>$t['ticket_number']??null,'plate_number'=>$t['plate_number']??null,'vehicle_type'=>$t['vehicle_type']??null,
             'violation_code'=>$t['violation_code']??null,'violation_name'=>$t['violation_name']??null,'date_issued'=>$t['date_issued']??null,
             'status'=>$t['payment_status']??$t['status']??'unpaid','payment_date'=>$t['payment_date']??null,
             'penalty_amount'=>$t['penalty_amount']??0,'total_paid'=>$t['total_paid']??0,'remaining_balance'=>$t['remaining_balance']??0,
+            'has_recorded_payment'=>!empty($t['has_recorded_payment'])||(float)($t['total_paid']??0)>0,
             'has_notification_email'=>(bool)($t['has_notification_email']??false),'dispute_eligible'=>$msg==='','dispute_message'=>$msg];
     }
     unset($t);
@@ -30,14 +46,30 @@ function public_stats(array $params=[]): never{$r=supabase_rpc('tvtms_public_sta
 function public_dispute(array $params=[]): never
 {
     $b=json_input();
-    $ticket=dispute_ticket_number($b['ticket_number']??$b['ticketNumber']??'');
-    $token=trim((string)($b['challenge_token']??$b['challengeToken']??''));
-    $reason=clean_string($b['reason']??'',4000);
-    if($ticket===''||strlen($ticket)>30||!dispute_token_is_valid($token)||strlen($reason)<10){
-        fail('A valid ticket number, verified challenge, and a reason of 10–4000 characters are required.',400,'VALIDATION_ERROR');
+    $ticketValue=$b['ticket_number']??$b['ticketNumber']??'';
+    $ticket=is_string($ticketValue)?strtoupper(trim($ticketValue)):'';
+    $plateValue=$b['plate_number']??$b['plateNumber']??'';
+    $plate=is_string($plateValue)?normalize_plate($plateValue):'';
+    $reason=is_string($b['reason']??null)?trim($b['reason']):'';
+    $reasonLength=preg_match_all('/./us',$reason);
+    if($ticket===''||strlen($ticket)>30||$plate===''||strlen($plate)>30||$reasonLength===false||$reasonLength<10||$reasonLength>4000){
+        fail('A valid ticket number, plate number, and a reason of 10–4000 characters are required.',400,'VALIDATION_ERROR');
     }
-    $r=supabase_rpc('tvtms_public_dispute_verified',['p_ticket'=>$ticket,'p_challenge_hash'=>dispute_token_hash($token),'p_reason'=>$reason]);
+    try{
+        $r=supabase_rpc('tvtms_public_dispute_submit',['p_ticket'=>$ticket,'p_plate'=>$plate,'p_reason'=>$reason]);
+    }catch(SupabaseException $e){
+        if(in_array($e->pgCode,['PGRST202','42883'],true)){
+            error_log('TVTMS public dispute RPC is missing or its signature is unavailable. Review the pending public-dispute migration and schema cache.');
+            fail('Online dispute submission is not available yet. Please contact the issuing office.',503,'PUBLIC_DISPUTE_NOT_CONFIGURED');
+        }
+        error_log('TVTMS public dispute database service is unavailable.');
+        fail('Online dispute submission is temporarily unavailable. Please try again later or contact the issuing office.',503,'PUBLIC_DISPUTE_UNAVAILABLE');
+    }catch(Throwable $e){
+        error_log('TVTMS public dispute service request failed.');
+        fail('Online dispute submission is temporarily unavailable. Please try again later or contact the issuing office.',503,'PUBLIC_DISPUTE_UNAVAILABLE');
+    }
     $err=rpc_domain_error($r);if($err)fail_domain($err);
+    if(!is_array($r)||(int)($r['disputeId']??0)<=0)fail('Online dispute submission is temporarily unavailable. Please contact the issuing office.',503,'PUBLIC_DISPUTE_UNAVAILABLE');
     json_response(['success'=>true,'message'=>'Your dispute has been submitted for administrator review.','dispute_id'=>(int)($r['disputeId']??0)],201);
 }
 function public_violations(array $params=[]): never

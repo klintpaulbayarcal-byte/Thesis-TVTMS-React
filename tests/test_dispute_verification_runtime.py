@@ -125,10 +125,10 @@ public_dispute_verification_verify();'''
     assert "004219" not in json.dumps(args)
 
 
-def test_public_dispute_requires_valid_challenge_and_calls_only_verified_rpc():
+def test_public_dispute_calls_server_validated_rpc_without_challenge():
     source = PUBLIC.read_text(encoding="utf-8")
-    assert "challengeToken" in source
-    assert "tvtms_public_dispute_verified" in source
+    assert "challengeToken" not in source
+    assert "tvtms_public_dispute_submit" in source
     assert "tvtms_public_dispute'" not in source
     assert "owner_email'=>'eq." not in source
 
@@ -142,11 +142,11 @@ def test_retry_after_survives_domain_error_and_is_sent_by_fail_domain():
     assert "Retry-After:" in common
 
 
-def test_routes_and_outer_rate_limits_are_distinct():
+def test_otp_routes_are_removed_and_public_submission_rate_limit_is_preserved():
     router = (ROOT / "api/src/router.php").read_text(encoding="utf-8")
     index = (ROOT / "api/index.php").read_text(encoding="utf-8")
-    assert "/api/public/dispute/verification/request" in router
-    assert "/api/public/dispute/verification/verify" in router
-    assert router.index("/api/public/dispute/verification/request") < router.index("/api/public/dispute/?")
-    for marker in ["dispute-code-request", "dispute-code-verify", "public-dispute-submit"]:
-        assert marker in index
+    assert "/api/public/dispute/verification/request" not in router
+    assert "/api/public/dispute/verification/verify" not in router
+    assert "['POST', '#^/api/public/dispute/?$#', 'public_dispute']" in router
+    assert "['public-dispute-submit',8,1800," in index
+    assert 'RATE_LIMIT_PUBLIC_DISPUTE' in index

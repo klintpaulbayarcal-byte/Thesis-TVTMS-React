@@ -15,8 +15,8 @@ function normalize_plate($value): string {{ return strtoupper(trim((string)$valu
 function normalize_email($value): string {{ return strtolower(trim((string)$value)); }}
 function fail(string $message,int $status=400,string $code="ERROR",array $extra=[]): never {{ echo json_encode(["failed"=>$code]);exit; }}
 function supabase_rpc(string $name,array $args=[]): mixed {{ return [
-  ["id"=>22,"ticket_number"=>"TVT-2026-000022","status"=>"unpaid","payment_status"=>"unpaid","owner_email"=>"leaked@example.test","has_notification_email"=>true,"dispute_deadline_days"=>15,"dispute_age_days"=>2,"has_open_dispute"=>0],
-  ["id"=>11,"ticket_number"=>"TVT-2026-000011","status"=>"unpaid","payment_status"=>"unpaid","has_notification_email"=>false,"dispute_deadline_days"=>15,"dispute_age_days"=>3,"has_open_dispute"=>0]
+  ["id"=>22,"ticket_number"=>"TVT-2026-000022","status"=>"unpaid","payment_status"=>"partially_paid","total_paid"=>1999,"owner_email"=>"leaked@example.test","has_notification_email"=>true,"dispute_deadline_days"=>15,"dispute_age_days"=>2,"has_open_dispute"=>0],
+  ["id"=>11,"ticket_number"=>"TVT-2026-000011","status"=>"unpaid","payment_status"=>"unpaid","total_paid"=>0,"has_recorded_payment"=>true,"has_notification_email"=>false,"dispute_deadline_days"=>15,"dispute_age_days"=>3,"has_open_dispute"=>0]
 ]; }}
 function supabase_select(string $table,array $filters=[],array $options=[]): array {{ global $selectCall;$selectCall=[$table,$filters,$options];return [
   ["id"=>11,"owner_email"=>""],
@@ -40,6 +40,10 @@ public_ticket_lookup();'''
     payload = output["payload"]
     assert payload["tickets"][0]["has_notification_email"] is True
     assert payload["tickets"][1]["has_notification_email"] is False
+    for ticket in payload['tickets']:
+        assert ticket['has_recorded_payment'] is True
+        assert ticket['dispute_eligible'] is False
+        assert 'recorded payment' in ticket['dispute_message']
     assert output["selectCall"] == []
     serialized = json.dumps(payload)
     assert "djklintskie@gmail.com" not in serialized
@@ -48,10 +52,10 @@ public_ticket_lookup();'''
     assert '"id"' not in serialized
 
 
-def test_public_lookup_ui_uses_only_boolean_email_availability():
+def test_public_lookup_ui_does_not_require_or_expose_email():
     source = (ROOT / "src/pages/PublicTicketLookup.jsx").read_text(encoding="utf-8")
-    assert "ticket.has_notification_email" in source
+    assert "ticket.has_notification_email" not in source
     assert "ticket.notification_email_masked" not in source
-    assert "notificationEmailMasked&&" in source
+    assert "notificationEmailMasked" not in source
     for forbidden in ["owner_name", "owner_email", "owner_address", "driver_license_number", "official_receipt_number"]:
         assert forbidden not in source

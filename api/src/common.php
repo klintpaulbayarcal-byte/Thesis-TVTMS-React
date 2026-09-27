@@ -135,5 +135,29 @@ function fail_domain(array $error): never
 
 function rate_limit_check(string $bucket,int $max,int $windowSeconds,?string $ip=null,?int $now=null,?string $directory=null): array
 {
-    $now??=time();$ip??=(string)($_SERVER['REMOTE_ADDR']??'unknown');$directory??=sys_get_temp_dir().'/tvtms-rate-limit';if(!is_dir($directory)&&!@mkdir($directory,0700,true)&&!is_dir($directory))return ['allowed'=>true,'remaining'=>$max,'retry_after'=>0];$file=$directory.'/'.hash('sha256',$bucket.'|'.$ip).'.json';$fh=@fopen($file,'c+');if(!$fh)return ['allowed'=>true,'remaining'=>$max,'retry_after'=>0];try{if(!flock($fh,LOCK_EX))return ['allowed'=>true,'remaining'=>$max,'retry_after'=>0];$raw=stream_get_contents($fh);$state=$raw?json_decode($raw,true):null;$start=(int)($state['start']??$now);$count=(int)($state['count']??0);if($now-$start>=$windowSeconds){$start=$now;$count=0;}$allowed=$count<$max;if($allowed)$count++;ftruncate($fh,0);rewind($fh);fwrite($fh,json_encode(['start'=>$start,'count'=>$count]));fflush($fh);flock($fh,LOCK_UN);return ['allowed'=>$allowed,'remaining'=>max(0,$max-$count),'retry_after'=>$allowed?0:max(1,$windowSeconds-($now-$start))];}finally{fclose($fh);}
+    $now??=time();
+    $ip??=(string)($_SERVER['REMOTE_ADDR']??'unknown');
+    $directory??=sys_get_temp_dir().'/tvtms-rate-limit';
+    $unavailable=['allowed'=>false,'remaining'=>0,'retry_after'=>60,'unavailable'=>true];
+    if(!is_dir($directory)&&!@mkdir($directory,0700,true)&&!is_dir($directory))return $unavailable;
+    $file=$directory.'/'.hash('sha256',$bucket.'|'.$ip).'.json';
+    $fh=@fopen($file,'c+');
+    if(!$fh)return $unavailable;
+    try{
+        if(!@flock($fh,LOCK_EX|LOCK_NB))return $unavailable;
+        $raw=@stream_get_contents($fh);
+        if($raw===false)return $unavailable;
+        $state=$raw!==''?json_decode($raw,true):['start'=>$now,'count'=>0];
+        if(!is_array($state)||!is_int($state['start']??null)||!is_int($state['count']??null)||$state['count']<0)return $unavailable;
+        $start=$state['start'];$count=$state['count'];
+        if($now-$start>=$windowSeconds){$start=$now;$count=0;}
+        if($count>=$max)return ['allowed'=>false,'remaining'=>0,'retry_after'=>max(1,$windowSeconds-($now-$start))];
+        $count++;
+        $encoded=json_encode(['start'=>$start,'count'=>$count]);
+        if($encoded===false||!@rewind($fh)||!@ftruncate($fh,0)||@fwrite($fh,$encoded)!==strlen($encoded)||!@fflush($fh))return $unavailable;
+        return ['allowed'=>true,'remaining'=>max(0,$max-$count),'retry_after'=>0];
+    }finally{
+        @flock($fh,LOCK_UN);
+        fclose($fh);
+    }
 }
