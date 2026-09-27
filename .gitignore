@@ -6,7 +6,9 @@ api/config/config.local.php
 .env.*
 !.env.example
 .pytest_cache/
+.test-tmp/
 __pycache__/
 *.pyc
 *.zip
 *.bak
+artifacts/

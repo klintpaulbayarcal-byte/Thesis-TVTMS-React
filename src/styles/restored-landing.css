@@ -62,3 +62,118 @@
 .landing-contact-form label{font-size:10px;font-weight:800;color:var(--ink);padding-left:2px}
 .sc-full-plate{display:flex;justify-content:center;padding:9px 10px;border-radius:9px;border:1px solid rgba(96,165,250,.28);background:rgba(37,99,235,.10);color:#bfdbfe;text-decoration:none;font-size:9px;font-weight:800}
 @media(max-width:650px){.legacy-landing{padding-top:66px}}
+
+/* Approved landing-page hero. Keep every rule scoped to the public landing header,
+   hero, benefit cards, or the relocated copy of the existing quick lookup. */
+.legacy-landing:has(> .approved-landing-nav){--approved-nav-height:clamp(55px,4.2vw,80px);--approved-nav-gutter:clamp(24px,6.8vw,130px);--approved-hero-gutter:clamp(48px,8vw,152px);--approved-card-gutter:clamp(24px,6.8vw,130px);--approved-card-overlap:clamp(32px,2.75vw,52px);padding-top:var(--approved-nav-height)}
+.legacy-landing .approved-landing-nav{min-height:var(--approved-nav-height);padding:0 var(--approved-nav-gutter);background:rgba(4,27,58,.98);box-shadow:0 8px 24px rgba(2,15,34,.16)}
+.legacy-landing .approved-landing-nav .landing-brand{gap:clamp(9px,.7vw,13px)}
+.legacy-landing .approved-landing-nav .landing-brand img{width:clamp(44px,3vw,56px);height:clamp(44px,3vw,56px);border-radius:50%}
+.legacy-landing .approved-landing-nav .landing-brand strong{font-size:clamp(12px,.95vw,18px);line-height:1.1}
+.legacy-landing .approved-landing-nav .landing-brand span{color:#d6e4f3;font-size:clamp(8px,.55vw,10px);margin-top:clamp(3px,.25vw,5px)}
+.legacy-landing .approved-landing-nav .landing-nav-links{gap:clamp(6px,.55vw,11px)}
+.legacy-landing .approved-landing-nav .landing-nav-links>a{position:relative;color:#fff;font-size:clamp(8.5px,.62vw,12px);font-weight:750;padding:clamp(8px,.7vw,13px) clamp(7px,.65vw,12px)}
+.legacy-landing .approved-landing-nav .landing-nav-links>a.active::after{content:"";position:absolute;left:clamp(7px,.65vw,12px);right:clamp(7px,.65vw,12px);bottom:clamp(-4px,-.2vw,-3px);height:2px;border-radius:999px;background:#fff}
+.legacy-landing .approved-landing-nav .landing-nav-links .landing-login-btn{display:inline-flex;align-items:center;justify-content:center;gap:clamp(7px,.5vw,10px);margin-left:clamp(14px,1vw,20px);min-height:clamp(32px,2.5vw,48px);padding:clamp(8px,.7vw,13px) clamp(15px,1.1vw,22px);color:#fff;background:#0878f9;border:1px solid #248bff;border-radius:clamp(7px,.5vw,10px);box-shadow:0 8px 18px rgba(8,120,249,.25)}
+.legacy-landing .approved-landing-nav .landing-nav-links .landing-login-btn:hover{background:#086ad8}
+
+.legacy-landing .approved-landing-hero{height:clamp(470px,42vw,800px);min-height:clamp(470px,42vw,800px);display:flex;align-items:center;max-width:none;margin:0;padding:clamp(54px,5vw,96px) var(--approved-hero-gutter) clamp(62px,6vw,116px);background-image:linear-gradient(90deg,rgba(2,23,49,.95) 0%,rgba(2,25,54,.86) 28%,rgba(2,27,59,.58) 44%,rgba(2,27,59,.19) 63%,rgba(2,27,59,.035) 100%),url('/images/calape-police-station-clean.png');background-position:center,center 47%;background-size:cover,cover;background-repeat:no-repeat;border-bottom:0;clip-path:ellipse(102% 100% at 50% 0)}
+.legacy-landing .approved-landing-hero::before{background:linear-gradient(180deg,rgba(1,13,31,.04) 0%,rgba(1,13,31,0) 64%,rgba(1,13,31,.14) 100%)}
+.legacy-landing .approved-landing-hero .approved-hero-content{width:clamp(500px,50vw,900px);max-width:clamp(500px,50vw,900px);padding:0;background:none;border-radius:0;transform:translateY(clamp(6px,.6vw,12px))}
+.legacy-landing .approved-landing-hero .hero-chip{margin-bottom:clamp(10px,.8vw,15px);padding:clamp(6px,.45vw,9px) clamp(10px,.7vw,14px);color:#eef7ff;background:rgba(3,43,84,.48);border-color:rgba(31,211,165,.42);font-size:clamp(9px,.6vw,11.5px);letter-spacing:0}
+.legacy-landing .approved-landing-hero .hero-chip>span{width:clamp(7px,.5vw,10px);height:clamp(7px,.5vw,10px);background:#12d492}
+.legacy-landing .approved-landing-hero .hero-tagline{margin:0 0 clamp(3px,.45vw,9px);color:#fff;font-size:clamp(9px,.68vw,13px);font-weight:800;letter-spacing:.14em}
+.legacy-landing .approved-landing-hero .hero-title{display:flex;flex-direction:column;max-width:100%;margin:0 0 clamp(13px,1.1vw,21px)!important;font-size:clamp(50px,4.6vw,88px)!important;line-height:.82!important;font-weight:850;letter-spacing:-.035em!important;text-shadow:0 3px 20px rgba(0,0,0,.24)}
+.legacy-landing .approved-landing-hero .hero-title span{display:block;color:#fff;font:inherit;font-style:normal;letter-spacing:inherit;margin:0;text-transform:none;white-space:nowrap}
+.legacy-landing .approved-landing-hero .hero-sub{max-width:clamp(350px,33vw,630px);margin:0 0 clamp(17px,1.5vw,29px);color:#ecf3fb;font-size:clamp(11.5px,.78vw,15px);line-height:1.62;text-shadow:0 2px 12px rgba(0,0,0,.34)}
+.legacy-landing .approved-landing-hero .hero-no-break{white-space:nowrap}
+.legacy-landing .approved-landing-hero .hero-actions{margin:0;gap:clamp(13px,1vw,19px)}
+.legacy-landing .approved-landing-hero .landing-btn-primary,.legacy-landing .approved-landing-hero .landing-btn-ghost{min-height:clamp(39px,2.85vw,54px);padding:clamp(9px,.75vw,14px) clamp(15px,1.1vw,21px);border-radius:clamp(7px,.5vw,10px);font-size:clamp(10px,.68vw,13px)}
+.legacy-landing .approved-landing-hero .landing-btn-primary{min-width:clamp(170px,12.8vw,246px);background:#0878f9;box-shadow:0 9px 20px rgba(8,120,249,.28)}
+.legacy-landing .approved-landing-hero .landing-btn-ghost{min-width:clamp(135px,10vw,192px);background:rgba(2,24,52,.52);border-color:rgba(255,255,255,.68);color:#fff;backdrop-filter:blur(5px)}
+
+.legacy-landing .landing-hero-feature-band{position:relative;z-index:8;margin-top:calc(-1 * var(--approved-card-overlap));padding:0 var(--approved-card-gutter) clamp(9px,.6vw,12px);background:linear-gradient(180deg,transparent 0,transparent var(--approved-card-overlap),#f6f8fc var(--approved-card-overlap),#f6f8fc 100%)}
+.legacy-landing .landing-hero-feature-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(8px,.9vw,17px);width:100%;max-width:none;margin:0 auto}
+.legacy-landing .landing-hero-feature-card{height:clamp(84px,6.65vw,128px);min-height:clamp(84px,6.65vw,128px);display:flex;align-items:center;gap:clamp(13px,1vw,19px);padding:clamp(11px,1vw,19px) clamp(12px,1.1vw,21px);border:1px solid rgba(150,190,232,.34);border-radius:clamp(9px,.75vw,15px);background:linear-gradient(145deg,#0a315d,#123c68);box-shadow:0 10px 22px rgba(9,36,81,.16);color:#fff}
+.legacy-landing .landing-hero-feature-icon{flex:0 0 clamp(38px,3vw,58px);width:clamp(38px,3vw,58px);height:clamp(38px,3vw,58px);display:grid;place-items:center;border-radius:50%;background:#0878f9;color:#fff;box-shadow:0 6px 14px rgba(8,120,249,.24)}
+.legacy-landing .landing-hero-feature-icon svg{width:clamp(18px,1.45vw,28px);height:clamp(18px,1.45vw,28px)}
+.legacy-landing .landing-hero-feature-card h2{margin:0 0 clamp(5px,.4vw,8px);color:#fff;font-size:clamp(10px,.8vw,15px);line-height:1.2;font-weight:800}
+.legacy-landing .landing-hero-feature-card p{margin:0;color:#d7e6f5;font-size:clamp(7.5px,.55vw,10.5px);line-height:1.5}
+
+@media(min-width:1001px){
+  /* Retain the row's layout space so lower sections stay in place. */
+  .legacy-landing .landing-hero-feature-grid{min-height:clamp(84px,6.65vw,128px);transform:translateY(-18px)}
+  .legacy-landing .landing-hero-feature-card{height:clamp(80px,6.25vw,120px);min-height:clamp(80px,6.25vw,120px);padding-top:clamp(9px,.8vw,15px);padding-bottom:clamp(9px,.8vw,15px)}
+  .legacy-landing .landing-hero-feature-card p{font-size:clamp(8px,.6vw,11.5px)}
+}
+
+.legacy-landing .landing-lookup-section{padding:clamp(16px,2vw,38px) 28px clamp(42px,3vw,58px);background:#f6f8fc;scroll-margin-top:calc(var(--approved-nav-height) + 12px);animation:approvedLookupReveal .22s ease-out}
+.legacy-landing .landing-lookup-inner{width:min(100%,620px);margin:0 auto}
+.legacy-landing .landing-lookup-section .relocated-lookup{width:100%;max-width:none}
+.legacy-landing .landing-lookup-section .search-card{background:#092451;border-color:rgba(108,167,226,.34);box-shadow:0 18px 40px rgba(9,36,81,.16)}
+@keyframes approvedLookupReveal{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+
+@media(max-width:1000px){
+  .legacy-landing .approved-landing-nav .landing-nav-links{position:absolute;left:16px;right:16px;top:calc(var(--approved-nav-height) - 2px);display:none;flex-direction:column;align-items:stretch;gap:4px;padding:12px;background:#081d3a;border:1px solid rgba(148,183,218,.2);border-radius:13px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+  .legacy-landing .approved-landing-nav .landing-nav-links.open{display:flex}
+  .legacy-landing .approved-landing-nav .landing-nav-links{max-height:calc(100dvh - var(--approved-nav-height) - 16px);overflow-y:auto}
+  .legacy-landing .approved-landing-nav .landing-nav-links>a{padding:11px 12px;font-size:14px;min-height:44px}
+  .legacy-landing .approved-landing-nav .landing-nav-links>a.active::after{display:none}
+  .legacy-landing .approved-landing-nav .landing-nav-links .landing-login-btn{margin-left:0}
+  .legacy-landing .approved-landing-nav .landing-nav-toggle{display:flex}
+  .legacy-landing .approved-landing-hero .approved-hero-content{width:min(680px,78vw);max-width:min(680px,78vw)}
+  .legacy-landing .landing-hero-feature-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .legacy-landing .landing-hero-feature-card{height:auto;min-height:84px}
+  .legacy-landing .landing-hero-feature-card h2{font-size:13px}
+  .legacy-landing .landing-hero-feature-card p{font-size:12px}
+  .legacy-landing .approved-landing-hero .landing-btn-primary,.legacy-landing .approved-landing-hero .landing-btn-ghost{font-size:12px;min-height:44px}
+}
+@media(max-width:650px){
+  .legacy-landing:has(> .approved-landing-nav){--approved-nav-height:66px;--approved-nav-gutter:15px;--approved-hero-gutter:18px;--approved-card-gutter:14px;--approved-card-overlap:24px}
+  .legacy-landing .approved-landing-nav{padding:0 var(--approved-nav-gutter)}
+  .legacy-landing .approved-landing-nav .landing-brand img{width:39px;height:39px}
+  .legacy-landing .approved-landing-nav .landing-brand strong{font-size:14px}
+  .legacy-landing .approved-landing-nav .landing-brand span{font-size:8px;margin-top:2px}
+  .legacy-landing .approved-landing-hero{height:auto;min-height:620px;padding:68px var(--approved-hero-gutter) 84px;background-image:linear-gradient(90deg,rgba(2,23,49,.96),rgba(2,25,54,.79)),url('/images/calape-police-station-clean.png');background-position:center,58% center;clip-path:none}
+  .legacy-landing .approved-landing-hero .approved-hero-content{width:100%;max-width:100%;padding:0;transform:none}
+  .legacy-landing .approved-landing-hero .hero-chip{margin-bottom:17px}
+  .legacy-landing .approved-landing-hero .hero-tagline{font-size:10px;letter-spacing:.12em}
+  .legacy-landing .approved-landing-hero .hero-title{font-size:clamp(26px,8.5vw,50px)!important;line-height:1.02!important;margin-bottom:20px!important}
+  .legacy-landing .approved-landing-hero .hero-sub{font-size:12px;line-height:1.65}
+  .legacy-landing .approved-landing-hero .hero-actions{grid-template-columns:1fr;gap:10px}
+  .legacy-landing .approved-landing-hero .landing-btn-primary,.legacy-landing .approved-landing-hero .landing-btn-ghost{width:100%;min-width:0;min-height:50px}
+  .legacy-landing .landing-hero-feature-band{padding-bottom:34px}
+  .legacy-landing .landing-hero-feature-grid{grid-template-columns:1fr;gap:10px}
+  .legacy-landing .landing-hero-feature-card{height:auto;min-height:0;padding:18px}
+  .legacy-landing .landing-lookup-section{padding:12px 14px 42px}
+  .legacy-landing .landing-lookup-section .search-card{padding:23px 18px}
+}
+
+/* Small refinements below the approved hero; keep its layout and imagery intact. */
+.legacy-landing .landing-section{padding-block:68px}
+.legacy-landing .feature-grid p{font-size:11.5px;color:#405875}
+.legacy-landing .landing-hero-feature-card p{color:#edf5ff}
+.legacy-landing .ticker-track{animation:tickerMove 90s linear infinite}
+.legacy-landing .ticker-group{display:flex;flex-shrink:0;min-width:100vw}
+.legacy-landing .ticker:hover .ticker-track{animation-play-state:paused}
+.legacy-landing .timeline-item{position:relative}
+@media(min-width:1001px){
+  .legacy-landing .timeline-item:not(:last-child)::after{content:"";position:absolute;left:100%;top:50%;width:13px;height:1px;background:#9bb8d7}
+}
+.legacy-landing .about-media,.legacy-landing .about-media img{background:#092451}
+.legacy-landing .landing-footer h4{color:#a9bfd7;font-size:10px}
+.legacy-landing .landing-footer p,.legacy-landing .landing-footer a{color:#9cb2ca;font-size:10.5px}
+.legacy-landing .landing-footer-bottom,.legacy-landing .landing-footer-bottom strong{color:#9cb2ca;font-size:10px}
+@media(max-width:1000px){
+  .legacy-landing .approved-landing-nav .landing-nav-links>a.active{background:rgba(255,255,255,.1);color:#fff}
+}
+@media(max-width:650px){
+  .legacy-landing .landing-section{padding-block:50px}
+  .legacy-landing .timeline-item:not(:last-child)::after{content:"";position:absolute;left:50%;top:100%;width:1px;height:13px;background:#9bb8d7}
+}
+@media(prefers-reduced-motion:reduce){
+  .legacy-landing .ticker{overflow-x:auto}
+  .legacy-landing .ticker-track{animation:none}
+  .legacy-landing .ticker-group{min-width:0}
+  .legacy-landing .ticker-group[aria-hidden="true"]{display:none}
+}
