@@ -164,6 +164,13 @@
 .legacy-landing .landing-footer h4{color:#a9bfd7;font-size:10px}
 .legacy-landing .landing-footer p,.legacy-landing .landing-footer a{color:#9cb2ca;font-size:10.5px}
 .legacy-landing .landing-footer-bottom,.legacy-landing .landing-footer-bottom strong{color:#9cb2ca;font-size:10px}
+.legacy-landing .landing-footer a,.legacy-landing .landing-footer .tvtms-team-trigger{box-sizing:border-box;display:flex;align-items:center;gap:8px;width:100%;min-height:44px;margin:0 0 4px;padding:8px;border:1px solid transparent;border-radius:5px;background:transparent;color:#cfdeed;font-size:10.5px;line-height:1.7;text-align:left;text-decoration:none;cursor:pointer;touch-action:manipulation}
+.legacy-landing .landing-footer a::after,.legacy-landing .landing-footer .tvtms-team-trigger::after{content:"";flex:0 0 5px;width:5px;height:5px;margin-left:auto;margin-right:3px;border-top:1.5px solid currentColor;border-right:1.5px solid currentColor;transform:rotate(45deg);opacity:.8}
+.legacy-landing .landing-footer a:hover,.legacy-landing .landing-footer .tvtms-team-trigger:hover{color:#fff;background:rgba(255,255,255,.05);border-color:rgba(181,138,33,.3);text-decoration:none}
+.legacy-landing .landing-footer a:focus-visible,.legacy-landing .landing-footer .tvtms-team-trigger:focus-visible{color:#fff;background:rgba(255,255,255,.05);outline:2px solid #b58a21;outline-offset:2px}
+.legacy-landing .landing-footer a:active,.legacy-landing .landing-footer .tvtms-team-trigger:active{color:#fff;background:rgba(181,138,33,.12);border-color:rgba(181,138,33,.5)}
+.legacy-landing .landing-footer .tvtms-team-trigger{font-weight:600}
+.legacy-landing .landing-footer .tvtms-team-footer-icon{flex-shrink:0;color:#d6b55e}
 @media(max-width:1000px){
   .legacy-landing .approved-landing-nav .landing-nav-links>a.active{background:rgba(255,255,255,.1);color:#fff}
 }
