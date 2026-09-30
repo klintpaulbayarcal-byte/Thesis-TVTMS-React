@@ -5,9 +5,9 @@ import StatusBadge from '../components/StatusBadge';
 import Notice from '../components/Notice';
 import Modal from '../components/Modal';
 import Icon from '../components/Icon';
-import { firstArray, money, dateOnly } from '../utils/format';
+import { firstArray, money, dateOnly, manilaDateKey } from '../utils/format';
 
-const blankPayment=()=>({amount_paid:'',official_receipt_number:'',payment_method:'cash',payment_date:new Date().toISOString().slice(0,10),notes:''});
+const blankPayment=()=>({amount_paid:'',official_receipt_number:'',payment_method:'cash',payment_date:manilaDateKey(),notes:''});
 export default function Payments(){
   const [tickets,setTickets]=useState([]);const [selected,setSelected]=useState(null);const [payments,setPayments]=useState([]);const [notice,setNotice]=useState({type:'',text:''});const [open,setOpen]=useState(false);const [form,setForm]=useState(blankPayment());
   const load=()=>API.tickets({status:'unpaid',pageSize:100}).then(response=>setTickets(firstArray(response,['tickets']))).catch(error=>setNotice({type:'error',text:error.message}));

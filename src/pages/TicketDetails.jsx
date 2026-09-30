@@ -9,9 +9,9 @@ import StatusBadge from '../components/StatusBadge';
 import DataTable from '../components/DataTable';
 import Notice from '../components/Notice';
 import Modal from '../components/Modal';
-import { dateOnly, dateTime, firstArray, money } from '../utils/format';
+import { dateOnly, dateTime, firstArray, money, manilaDateKey } from '../utils/format';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = manilaDateKey;
 
 export default function TicketDetails() {
   const { id } = useParams();

@@ -3,17 +3,12 @@ import { API } from '../services/api';
 import MetricBars from '../components/MetricBars';
 import Notice from '../components/Notice';
 import Icon from '../components/Icon';
-import { money } from '../utils/format';
+import { money, manilaDateKey, manilaDaysAgo } from '../utils/format';
 
-const iso = date => date.toISOString().slice(0,10);
 const rangeFor = period => {
-  const end = new Date();
-  const start = new Date(end);
-  if (period === '7') start.setDate(start.getDate()-6);
-  else if (period === '30') start.setDate(start.getDate()-29);
-  else if (period === '90') start.setDate(start.getDate()-89);
-  else { start.setMonth(0,1); }
-  return { startDate: iso(start), endDate: iso(end) };
+  const endDate = manilaDateKey();
+  const days = { '7': 6, '30': 29, '90': 89 }[period];
+  return { startDate: days === undefined ? `${endDate.slice(0,4)}-01-01` : manilaDaysAgo(days), endDate };
 };
 
 export default function AnalyticsDashboard(){

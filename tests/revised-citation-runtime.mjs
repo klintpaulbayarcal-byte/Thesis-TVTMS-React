@@ -3,6 +3,7 @@ import { PGlite } from '@electric-sql/pglite';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { test, after } from 'node:test';
+import { manilaDateKey, manilaDaysAgo } from '../src/utils/format.js';
 
 const db = new PGlite();
 after(() => db.close());
@@ -37,6 +38,13 @@ async function payload(changes={}) {
 const issue=async (changes={},actor=9001)=>rpc('tvtms_ticket_create',[JSON.stringify(await payload(changes)),actor]);
 const code=r=>r.error?.errorCode??r.errorCode;
 let issued;
+
+test('date controls use the Manila calendar across UTC day and year boundaries',()=>{
+ const localMorning=new Date('2026-09-30T22:53:00Z');
+ assert.equal(manilaDateKey(localMorning),'2026-10-01');
+ assert.equal(manilaDaysAgo(1,localMorning),'2026-09-30');
+ assert.equal(manilaDateKey(new Date('2026-12-31T16:15:00Z')),'2027-01-01');
+});
 
 test('legacy stored amounts preserved; missing amounts frozen before catalog update',async()=>{
  const rows=await query('select ticket_number,penalty_amount_at_issue,legacy_penalty_recovered from public.tickets order by id');

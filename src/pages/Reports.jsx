@@ -5,14 +5,10 @@ import DataTable from '../components/DataTable';
 import StatCard from '../components/StatCard';
 import Notice from '../components/Notice';
 import StatusBadge from '../components/StatusBadge';
-import { dateOnly, money } from '../utils/format';
+import { dateOnly, money, manilaDateKey, manilaDaysAgo } from '../utils/format';
 
-const today = () => new Date().toISOString().slice(0, 10);
-const daysAgo = days => {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
-};
+const today = manilaDateKey;
+const daysAgo = manilaDaysAgo;
 
 const advancedOptions = [
   ['collections', 'Collections summary'],

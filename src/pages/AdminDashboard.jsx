@@ -7,13 +7,13 @@ import Notice from '../components/Notice';
 import StatCard from '../components/StatCard';
 import Icon from '../components/Icon';
 import { useAuth } from '../context/AuthContext';
-import { firstArray, firstObject, dateOnly, money } from '../utils/format';
+import { firstArray, firstObject, dateOnly, money, manilaDateKey, manilaDaysAgo } from '../utils/format';
 import { displayLocation } from '../utils/locationLabel';
 
 export default function AdminDashboard(){
  const [stats,setStats]=useState({}); const [tickets,setTickets]=useState([]); const [barangays,setBarangays]=useState([]); const [hotspots,setHotspots]=useState([]); const [error,setError]=useState(''); const [loading,setLoading]=useState(true); const [statsLoaded,setStatsLoaded]=useState(false); const nav=useNavigate(); const {user}=useAuth();
  useEffect(()=>{let active=true;
-   Promise.allSettled([API.ticketStats(),API.tickets({page:1,pageSize:8}),API.report('barangay'),API.report('hotspots',{startDate:new Date(Date.now()-30*86400000).toISOString().slice(0,10),endDate:new Date().toISOString().slice(0,10)})]).then(results=>{
+   Promise.allSettled([API.ticketStats(),API.tickets({page:1,pageSize:8}),API.report('barangay'),API.report('hotspots',{startDate:manilaDaysAgo(30),endDate:manilaDateKey()})]).then(results=>{
      if(!active)return;
      const [s,t,b,h]=results;
      if(s.status==='fulfilled'){setStats(firstObject(s.value,['stats']));setStatsLoaded(true);}
