@@ -20,20 +20,29 @@ function ticket_notification_message(array $claim): array
     $base=rtrim((string)(app_config()['app_public_url']??'https://trafficviolation.dcsbisu.com'),'/');
     $link=$base.'/ticket-lookup?ticket='.rawurlencode($ticket);
     $e=static fn(string $value): string=>htmlspecialchars($value,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8');
+    $lines='';
+    foreach(($claim['violations']??[]) as $item){
+        $lines.='<li>'.$e((string)($item['violation_code']??'')).' · '.$e((string)($item['violation_name']??'')).' — ₱'.number_format((float)($item['penalty_amount']??0),2).'</li>';
+    }
+    $details=$lines!==''?'<ul>'.$lines.'</ul>':'';
+    $legacyViolation=$lines===''?'<strong>Violation:</strong> '.$e($violation).'<br>':'';
+    if(!empty($claim['dateIssued']))$details.='<p><strong>Date/time issued (Asia/Manila):</strong> '.$e((string)$claim['dateIssued'].' '.(string)($claim['timeIssued']??'')).'</p>';
+    if(!empty($claim['appearanceDueDate']))$details.='<p><strong>Report/appear by:</strong> '.$e((string)$claim['appearanceDueDate']).' (seven calendar days after issuance). This is separate from the payment deadline.</p>';
     return [
         'subject'=>'Traffic Violation Notice — '.$ticket,
         'html'=>'<p>A traffic violation ticket has been issued.</p>'.
-            '<p><strong>Ticket number:</strong> '.$e($ticket).'<br>'.
+            '<p><strong>Traffic Citation No.:</strong> '.$e($ticket).'<br>'.
             '<strong>Plate number:</strong> '.$e($plate).'<br>'.
-            '<strong>Violation:</strong> '.$e($violation).'<br>'.
-            '<strong>Penalty:</strong> ₱'.$e($penalty).'</p>'.
+            $legacyViolation.
+            '<strong>Total citation penalty:</strong> ₱'.$e($penalty).'</p>'.$details.
             '<p><a href="'.$e($link).'">View this ticket in the public lookup</a></p>'.
             '<p>SMTP acceptance confirms only that the mail server accepted this notification.</p>',
     ];
 }
 
 /**
- * A fresh explicit confirmation is required on creation AND each retry.
+ * The reviewed driver address is confirmed during creation; retries require a
+ * fresh explicit confirmation of the same immutable recipient.
  * The immutable snapshot is read from tickets, never the mutable vehicles fallback.
  * SQL claim recipient and ticket identity are checked again before SMTP.
  */
@@ -51,7 +60,7 @@ function ticket_notification_attempt(int $actorId,array $ticket=[],?string $conf
     }
     try{
         $rows=supabase_select('tickets',['id'=>'eq.'.$ticketId],[
-            'select'=>'id,user_id,owner_email_at_issue','limit'=>1,
+            'select'=>'id,user_id,citation_version,driver_email_at_issue,owner_email_at_issue','limit'=>1,
         ]);
     }catch(Throwable){
         error_log('Ticket notification recipient verification unavailable.');
@@ -65,7 +74,7 @@ function ticket_notification_attempt(int $actorId,array $ticket=[],?string $conf
             'errorCode'=>'NOTIFICATION_TICKET_NOT_FOUND','statusCode'=>404,
         ]);
     }
-    $snapshot=strtolower(trim((string)($record['owner_email_at_issue']??'')));
+    $snapshot=strtolower(trim((string)(((int)($record['citation_version']??1)===2)?($record['driver_email_at_issue']??''):($record['owner_email_at_issue']??''))));
     if($snapshot===''||filter_var($snapshot,FILTER_VALIDATE_EMAIL)===false||!hash_equals($snapshot,$confirmed)){
         return ticket_notification_result('no_confirmed_recipient',null,false,'Ticket saved. The confirmed recipient does not match the email recorded when this ticket was issued; email was not sent.',[
             'errorCode'=>'NOTIFICATION_RECIPIENT_MISMATCH','statusCode'=>409,

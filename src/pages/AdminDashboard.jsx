@@ -31,7 +31,7 @@ export default function AdminDashboard(){
    return rows.filter(row=>row.count>0);
  },[barangays,hotspots]);
  const maxRisk=Math.max(1,...riskRows.map(r=>r.count));
- const columns=[{key:'ticket_number',label:'Ticket #'},{key:'date_issued',label:'Date',render:r=>dateOnly(r.date_issued)},{key:'plate_number',label:'Plate Number'},{key:'violation_name',label:'Violation'},{key:'penalty_amount',label:'Penalty',render:r=>money(r.penalty_amount_at_issue??r.penalty_amount)},{key:'status',label:'Status',render:r=><StatusBadge value={r.status}/>}];
+ const columns=[{key:'ticket_number',label:'Citation Number'},{key:'date_issued',label:'Date',render:r=>dateOnly(r.date_issued)},{key:'plate_number',label:'Plate Number'},{key:'violation_name',label:'Violation'},{key:'penalty_amount',label:'Penalty',render:r=>money(r.penalty_amount_at_issue??r.penalty_amount)},{key:'status',label:'Status',render:r=><StatusBadge value={r.status}/>}];
  const repeat=stats.repeatOffenders??stats.repeat_offenders??0; const unpaid=Number(stats.unpaid??0); const paid=Number(stats.paid??0); const total=Number(stats.total??0); const revenue=Number(stats.revenue??0);
  return <div className="admin-dashboard-restored">
    <Notice type="error">{error}</Notice>

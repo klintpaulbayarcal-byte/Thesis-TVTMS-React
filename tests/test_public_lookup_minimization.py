@@ -50,3 +50,12 @@ def test_public_handler_does_not_fetch_or_return_email_metadata():
 def test_public_lookup_ui_does_not_render_incident_location():
     page = read("src/pages/PublicTicketLookup.jsx")
     assert "ticket.location" not in page
+
+
+def test_public_lookup_renders_each_safe_violation_and_appearance_deadline():
+    page = read("src/pages/PublicTicketLookup.jsx")
+    assert "<citationviolations ticket={ticket} publicview/>" in page
+    assert "ticket.appearance_due_date" in page
+    assert "ticket.violations?.length" in page
+    for private_field in ("driver_email_at_issue", "driver_license_number", "driver_address"):
+        assert private_field not in page

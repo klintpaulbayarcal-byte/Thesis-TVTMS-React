@@ -22,6 +22,7 @@
     "react-router-dom": "7.18.4"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "@vitejs/plugin-react": "6.1.1",
     "concurrently": "^9.1.2",
     "typescript": "^5.8.3",

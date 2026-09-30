@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import CitationViolations from '../components/CitationViolations';
 import { API } from '../services/api';
 import Notice from '../components/Notice';
 import StatusBadge from '../components/StatusBadge';
@@ -108,13 +109,13 @@ export default function PublicTicketLookup(){
         <div className="lookup-top"><h2>Look up your ticket</h2><div className="lookup-sub">Fast, secure public lookup</div></div>
         <div className="search-tabs" role="tablist" aria-label="Ticket lookup mode">
           <button type="button" className={`tab-btn ${mode==='plate'?'active':''}`} role="tab" aria-selected={mode==='plate'} onClick={()=>switchMode('plate')}>By Plate Number</button>
-          <button type="button" className={`tab-btn ${mode==='ticket'?'active':''}`} role="tab" aria-selected={mode==='ticket'} onClick={()=>switchMode('ticket')}>By Ticket Number</button>
+          <button type="button" className={`tab-btn ${mode==='ticket'?'active':''}`} role="tab" aria-selected={mode==='ticket'} onClick={()=>switchMode('ticket')}>By Citation Number</button>
         </div>
         <form className="search-panel active" onSubmit={search}>
           <div className="form-group">
-            <label htmlFor="publicLookupInput">{mode==='plate'?'Plate Number':'Ticket Number'}</label>
-            <input id="publicLookupInput" className="form-control" required minLength="2" maxLength="30" placeholder={mode==='plate'?'e.g. ABC1234':'e.g. TVT-2026-0001'} value={query} onChange={e=>{setQuery(e.target.value.toUpperCase());resetDispute();}}/>
-            <div className="hint">{mode==='plate'?'Enter the plate number printed on your vehicle registration.':'The ticket number is printed at the top of your violation ticket slip.'}</div>
+            <label htmlFor="publicLookupInput">{mode==='plate'?'Plate Number':'Citation Number'}</label>
+            <input id="publicLookupInput" className="form-control" required minLength="1" maxLength="30" placeholder={mode==='plate'?'e.g. ABC1234':'e.g. 7258'} value={query} onChange={e=>{setQuery(e.target.value.toUpperCase());resetDispute();}}/>
+            <div className="hint">{mode==='plate'?'Enter the plate number printed on your vehicle registration.':'The citation number is printed at the top of your violation ticket slip.'}</div>
           </div>
           <button className="btn-search" disabled={busy}>{busy?'Checking…':mode==='plate'?'Search Tickets':'Find My Ticket'}</button>
         </form>
@@ -134,12 +135,14 @@ export default function PublicTicketLookup(){
           </div>
         </div>}
         {tickets.map(ticket=><article className={`ticket-card status-${ticket.status||'unknown'}`} key={ticket.ticket_number}>
-          <div className="ticket-header"><div><small>Ticket Number</small><h3>{ticket.ticket_number}</h3></div><StatusBadge value={ticket.payment_status??ticket.status}/></div>
+          <div className="ticket-header"><div><small>Citation Number</small><h3>{ticket.ticket_number}</h3></div><StatusBadge value={ticket.payment_status??ticket.status}/></div>
           <dl className="details-grid">
             <div><dt>Date issued</dt><dd>{dateOnly(ticket.date_issued)}</dd></div><div><dt>Plate number</dt><dd>{ticket.plate_number||'—'}</dd></div>
-            <div><dt>Violation</dt><dd>{ticket.violation_name||'—'}</dd></div><div><dt>Penalty</dt><dd>{money(ticket.penalty_amount)}</dd></div>
+            <div><dt>Selected violations</dt><dd>{ticket.violations?.length||1}</dd></div><div><dt>Total citation penalty</dt><dd>{money(ticket.penalty_amount)}</dd></div>
             <div><dt>Paid</dt><dd>{money(ticket.total_paid)}</dd></div><div><dt>Balance</dt><dd>{money(ticket.remaining_balance)}</dd></div>
+            {ticket.appearance_due_date&&<div><dt>Report/appear by</dt><dd>{dateOnly(ticket.appearance_due_date)}</dd></div>}
           </dl>
+          <CitationViolations ticket={ticket} publicView/>
           {canFilePublicDispute(ticket)?<button type="button" className="dispute-trigger" disabled={disputeSubmitting} onClick={()=>openDispute(ticket)}>File a Dispute</button>:<div className="dispute-ineligible"><strong>Dispute unavailable for this ticket.</strong><Notice type="info">{ticket.dispute_message||'This ticket is not eligible for a dispute.'}</Notice><p>If you need clarification, please contact the issuing office.</p></div>}
         </article>)}
       </section>
@@ -150,7 +153,7 @@ export default function PublicTicketLookup(){
           <div className="dispute-desc">Choose an eligible ticket and explain your reason. Tickets with any recorded payment cannot be disputed. Disputes are submitted for administrator review.</div>
           <Notice type={disputeNotice.type}>{disputeNotice.text}</Notice>
           {selected?<form className="dispute-form" onSubmit={dispute}>
-            <div className="selected-ticket-summary">Selected ticket: <strong>{selected.ticket_number}</strong> · {selected.violation_name}</div>
+            <div className="selected-ticket-summary">Selected citation: <strong>{selected.ticket_number}</strong> · {selected.violations?.length||1} violation(s)</div>
             <div className="field"><label htmlFor="disputeReason">Reason for Dispute *</label><textarea id="disputeReason" rows="4" minLength="10" maxLength="4000" required disabled={disputeSubmitting} value={reason} onChange={e=>setReason(e.target.value)} placeholder="Explain why you believe this ticket should be disputed (at least 10 characters)." /></div>
             <button type="submit" className="dispute-submit" disabled={disputeSubmitting||reason.trim().length<10||reason.trim().length>4000}>{disputeSubmitting?'Submitting…':'Submit Dispute'}</button>
           </form>:<div className="selected-ticket-summary"><strong>No ticket selected.</strong> Select an eligible ticket above to open the dispute form. If a ticket says the dispute period has ended, the online form is unavailable for that ticket.</div>}

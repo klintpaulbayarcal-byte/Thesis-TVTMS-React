@@ -24,6 +24,8 @@ def test_issue_form_invalidates_stale_responses_on_every_input_reset():
     assert 'lookupGate.current.invalidate()' in src
     assert 'previewGate.current.isCurrent(token)' in src
     assert 'lookupGate.current.isCurrent(token)' in src
-    assert 'const plateChanged=event=>' in src
-    assert 'Same-Plate/Same-Violation Penalty Level: {sameViolationLevel}' in src
+    assert 'const plateChanged = event =>' in src
+    assert 'Same-plate/same-violation occurrence:' in src
     assert 'setPreview(null)' in src
+    assert 'submitLock.current = true' in src
+    assert 'submitLock.current || issued' in src

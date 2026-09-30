@@ -12,7 +12,7 @@ const adminSections = [
 ];
 const officerSections = [
   ['MAIN', [['/officer','Dashboard','dashboard']]],
-  ['ENFORCEMENT', [['/officer/issue-ticket','Issue Ticket','plus'],['/officer/tickets','My Tickets','ticket'],['/officer/lookup','Search Violator','search']]],
+  ['ENFORCEMENT', [['/officer/issue-ticket','Issue Traffic Citation','plus'],['/officer/tickets','My Tickets','ticket'],['/officer/lookup','Search Violator','search']]],
   ['ACCOUNT', [['/notifications','Notifications','bell'],['/profile','My Profile','user']]],
 ];
 

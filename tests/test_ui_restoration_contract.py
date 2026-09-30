@@ -73,8 +73,9 @@ def test_password_reset_reuses_finalized_login_visual_language():
 
 def test_issue_ticket_restores_finalized_form_structure():
     page = text('src/pages/IssueTicket.jsx')
-    for marker in ['New Violation Ticket', 'Vehicle Information', 'Violation Information', 'Plate Ticket Count at Issuance', 'Same-Plate/Same-Violation Penalty Level', 'ticket-form-actions', 'Instructions']:
+    for marker in ['New Traffic Citation', 'Vehicle / Registered Owner', 'Traffic Violations', 'Selected Violations', 'Plate Ticket Count at Issuance', 'monitoring only', 'Violation Details', 'Appearance Requirement', 'Apprehending Officer', 'ticket-form-actions']:
         assert marker in page, f'Issue Ticket should restore finalized marker: {marker}'
+    assert 'Incident Information' not in page
 
 
 def test_violator_lookup_restores_finalized_search_and_summary_sections():
@@ -123,5 +124,5 @@ def test_remaining_core_pages_restore_finalized_cards_and_workflow_labels():
         assert marker in reports
     for marker in ['analytics-hero', 'Analytics & KPI Dashboard']:
         assert marker in analytics
-    for marker in ['ticket-detail-card', 'VEHICLE VIOLATION TICKET', 'Date & Time Information', 'Vehicle Information', 'Violation Information', 'Issued By', 'Penalty Amount', 'Ticket Timeline', 'Payment History', 'Evidence']:
+    for marker in ['ticket-detail-card', 'TRAFFIC CITATION', 'Date & Time Information', 'Vehicle Information', 'Violation Information', 'Issued By', 'Total Citation Penalty', 'Ticket Timeline', 'Payment History', 'Evidence']:
         assert marker in details
