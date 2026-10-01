@@ -589,7 +589,7 @@ begin
  select * into t from public.tickets where ticket_number=p_ticket for update;
  if not found then return jsonb_build_object('errorCode','TICKET_NOT_FOUND','message','Ticket not found.','statusCode',404); end if;
  if not exists(select 1 from public.vehicles where id=t.vehicle_id
-     and upper(regexp_replace(trim(plate_number),'[[:space:]-]+','','g'))=upper(regexp_replace(trim(p_plate),'[[:space:]-]+','','g'))) then
+     and upper(regexp_replace(trim(coalesce(t.plate_at_issue,plate_number)),'[[:space:]-]+','','g'))=upper(regexp_replace(trim(p_plate),'[[:space:]-]+','','g'))) then
    return jsonb_build_object('errorCode','TICKET_PLATE_MISMATCH','message','Ticket number and plate number do not match.','statusCode',403);
  end if;
  if exists(select 1 from public.payments where ticket_id=t.id) then

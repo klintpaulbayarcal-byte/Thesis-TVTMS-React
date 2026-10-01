@@ -176,6 +176,16 @@ test('eligible public dispute stays one citation; duplicates blocked; ticket unc
  assert.deepEqual(await query('select * from public.tickets where id=$1',[t.id]),before);
  const review=await rpc('tvtms_dispute_resolve',[r.disputeId,'under_review','Test administrator review',9002]);assert.ok(!code(review));
 });
+test('public dispute verifies the issued plate after a vehicle plate correction',async()=>{
+ const t=(await issue({plate_number:'OLDPLATE1'})).ticket;
+ const current=await query('select vehicle_id from public.tickets where id=$1',[t.id]);
+ await query("update public.vehicles set plate_number='NEWPLATE1' where id=$1",[current[0].vehicle_id]);
+ const found=(await rpc('tvtms_public_lookup',[null,t.ticket_number]))[0];
+ assert.equal(found.plate_number,'OLDPLATE1');
+ assert.equal(code(await rpc('tvtms_public_dispute_submit',[t.ticket_number,'NEWPLATE1','Plate correction test dispute.'])),'TICKET_PLATE_MISMATCH');
+ const filed=await rpc('tvtms_public_dispute_submit',[t.ticket_number,found.plate_number,'Plate correction test dispute.']);
+ assert.ok(filed.disputeId,JSON.stringify(filed));
+});
 test('any recorded payment blocks dispute, including partial/full/voided',async()=>{
  for(const amount of [1,300]){
   const t=(await issue()).ticket;await rpc('tvtms_payment_record',[t.id,'TEST-'+t.ticket_number,amount,t.date_issued,'cash','Test',9002]);
