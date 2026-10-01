@@ -33,6 +33,7 @@ def test_catalog_load_is_independent_of_pricing_and_form_has_no_editable_time():
     handler = (ROOT / 'api/src/handlers/violations.php').read_text(encoding='utf-8')
     assert "#^/api/violations/active/?$#" in router
     assert "'status'=>'eq.active'" in handler
+    assert handler.count("'is_citation_selectable'=>'eq.true'") == 2
     assert 'API.activeViolations().then' in page
     assert 'API.citationContext().then' in page
     assert 'Promise.all([API.activeViolations(), API.citationContext()])' not in page

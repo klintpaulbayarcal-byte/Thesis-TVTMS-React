@@ -8,7 +8,11 @@ lock table public.tickets, public.violations in share row exclusive mode;
 
 alter table public.users add column officer_rank varchar(100);
 alter table public.vehicles add column vehicle_make varchar(100);
-alter table public.violations add column requires_description boolean not null default false;
+-- Keep legacy catalog rows for history/Admin views; only approved rows enter
+-- the Officer checklist and new citation RPC.
+alter table public.violations
+  add column requires_description boolean not null default false,
+  add column is_citation_selectable boolean not null default false;
 alter table public.tickets
   add column citation_version smallint not null default 1 check(citation_version in (1,2)),
   add column legacy_penalty_recovered boolean not null default false,
@@ -94,6 +98,11 @@ where violation_code='V008' and violation_name='Illegal Parking'
 update public.violations set violation_name='Disregarding traffic signs & signals'
 where violation_code='V012' and violation_name='Disregarding Traffic Signs'
   and not exists(select 1 from public.violations where lower(violation_name)='disregarding traffic signs & signals');
+-- Broaden only untouched seed descriptions to match the printed choices.
+update public.violations set description='Defective or non-functional vehicle lighting accessory'
+where violation_code='V015' and description='Broken or non-functional headlights/taillights';
+update public.violations set description='Stopping or parking in a prohibited area'
+where violation_code='V008' and description='Parking in area prohibited by local ordinance';
 
 -- Reuse equivalent Administrator-managed entries. Do not silently reactivate
 -- a disabled entry or overwrite an unrelated code: stop for catalog review.
@@ -102,24 +111,28 @@ declare choice record; existing record;
 begin
  for choice in select * from (values
   ('TC001','Not carrying driver''s license',array['notcarryingdriverslicense','failtocarrydriverslicense','notcarryinglicense']),
-  ('TC002','Driving with delinquent or invalid driver''s license',array['drivingwithdelinquentorinvaliddriverslicense','invaliddriverslicense','delinquentdriverslicense']),
+  ('TC002','Driving with delinquent or invalid driver''s license',array['drivingwithdelinquentorinvaliddriverslicense']),
   ('TC003','Driving without license',array['drivingwithoutlicense','nolicense','drivingwithoutvalidlicense']),
   ('TC004','Defective lighting accessory',array['defectivelightingaccessory','defectivelights']),
   ('TC005','Overspeeding',array['overspeeding']),
   ('TC006','Reckless Driving',array['recklessdriving']),
   ('TC007','Hitching',array['hitching']),
-  ('TC008','Driving under the influence of liquor or drugs',array['drivingundertheinfluenceofliquorordrugs','drivingundertheinfluence','drunkdriving']),
+  ('TC008','Driving under the influence of liquor or drugs',array['drivingundertheinfluenceofliquorordrugs']),
   ('TC009','Obstruction to traffic',array['obstructiontotraffic']),
   ('TC010','Illegal stopping & parking',array['illegalstoppingparking','illegalstoppingandparking','illegalparking']),
   ('TC011','Disregarding traffic signs & signals',array['disregardingtrafficsignssignals','disregardingtrafficsignsandalsignals','disregardingtrafficsigns']),
-  ('TC012','Abandon/unattended vehicles or trailers on highways',array['abandonunattendedvehiclesortrailersonhighways','abandonedvehiclesonhighways']),
+  ('TC012','Abandon/unattended vehicles or trailers on highways',array['abandonunattendedvehiclesortrailersonhighways']),
   ('TC013','Obstruction loading/unloading in prohibited zone',array['obstructionloadingunloadinginprohibitedzone']),
   ('TC014','Overloading',array['overloading']),
   ('TC015','Motor vehicle racing',array['motorvehicleracing']),
   ('TC016','Refusal to convey passenger',array['refusaltoconveypassenger']),
-  ('TC017','Operating without permit/franchise',array['operatingwithoutpermitfranchise','operatingwithoutpermit','operatingwithoutfranchise']),
+  ('TC017','Operating without permit/franchise',array['operatingwithoutpermitfranchise']),
   ('TC018','Others',array['other','others'])
  ) as wanted(code,name,aliases) loop
+   if (select count(*) from public.violations
+       where lower(regexp_replace(violation_name,'[^[:alnum:]]','','g'))=any(choice.aliases))>1 then
+     raise exception 'Multiple catalog records match citation choice %; review before applying this migration',choice.name;
+   end if;
    select id,status into existing from public.violations
    where lower(regexp_replace(violation_name,'[^[:alnum:]]','','g'))=any(choice.aliases)
    order by (status='active') desc,id limit 1;
@@ -127,12 +140,15 @@ begin
      if existing.status<>'active' then
        raise exception 'Citation catalog choice % exists but is inactive; review it before applying this migration',choice.name;
      end if;
+     update public.violations set violation_name=choice.name,
+       is_citation_selectable=true,requires_description=(choice.name='Others')
+     where id=existing.id;
    else
      if exists(select 1 from public.violations where violation_code=choice.code) then
        raise exception 'Citation catalog code % is already used by a different violation',choice.code;
      end if;
-     insert into public.violations(violation_code,violation_name,penalty_amount,demerit_points,status,requires_description)
-     values(choice.code,choice.name,public.tvtms_citation_penalty(),0,'active',choice.name='Others');
+     insert into public.violations(violation_code,violation_name,penalty_amount,demerit_points,status,requires_description,is_citation_selectable)
+     values(choice.code,choice.name,public.tvtms_citation_penalty(),0,'active',choice.name='Others',true);
    end if;
  end loop;
 end;
@@ -249,7 +265,7 @@ begin
  return public.tvtms_ticket_error('DUPLICATE_CITATION','This citation number has already been issued.',409); end if;
  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('tvtms:plate:'||plate,0));
  perform id from public.violations where id=any(ids) order by id for share;
- if (select count(*) from public.violations where id=any(ids) and status='active')<>cardinality(ids) then
+ if (select count(*) from public.violations where id=any(ids) and status='active' and is_citation_selectable)<>cardinality(ids) then
  return public.tvtms_ticket_error('VIOLATION_UNAVAILABLE','A selected violation is unavailable.',400); end if;
  for item in select * from public.violations where id=any(ids) order by id loop
    additional:=nullif(trim(p_data->'violation_descriptions'->>item.id::text),'');

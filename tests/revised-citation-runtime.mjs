@@ -21,10 +21,13 @@ await db.exec(`insert into public.users(id,name,email,password,role) values
  insert into public.tickets(ticket_number,user_id,vehicle_id,violation_id,date_issued,time_issued,penalty_amount_at_issue,plate_ticket_count_at_issue,same_violation_offense_count_at_issue)
  values('LEGACY-STORED',9001,9001,1,current_date,'09:00',1999,1,1),('LEGACY-NULL',9001,9001,2,current_date,'10:00',null,2,1);
  insert into public.violations(violation_code,violation_name,penalty_amount,demerit_points)
- values('CUSTOM-HITCH','Hitching',777,0);
+ values('CUSTOM-HITCH','Hitching',777,0),
+ ('CUSTOM-INVALID','Invalid driver''s license',777,0),
+ ('CUSTOM-DUI','Drunk Driving',777,0);
  insert into public.violation_penalty_rules(violation_id,offense_count,penalty_amount,effective_from) values(1,2,9000,'2000-01-01');`);
 const legacyNullAmount=(await query('select penalty_amount from public.violations where id=2'))[0].penalty_amount;
 await db.exec(fs.readFileSync('supabase/migrations/'+revised,'utf8'));
+const officialIds=(await query('select id from public.violations where is_citation_selectable and status=$1 order by id',['active'])).map(row=>Number(row.id));
 await db.exec("update public.users set officer_rank='Police Corporal' where id=9001;");
 let serial=8000;
 async function payload(changes={}) {
@@ -33,7 +36,7 @@ async function payload(changes={}) {
  driver_first_name:'Test',driver_middle_name:'Middle',driver_last_name:'Driver',driver_address:'Test Address',driver_nationality:'Filipino',driver_email:'driver@example.test',
  license_type:'Non-Professional',driver_license_number:'TEST-LICENSE',owner_name:'Test Owner',owner_address:'Test Owner Address',
  location:'Test Barangay',remarks:'Test only',expected_date:context.date_issued,
- violation_ids:[1,2],violation_descriptions:{},...changes};
+ violation_ids:officialIds.slice(0,2),violation_descriptions:{},...changes};
 }
 const issue=async (changes={},actor=9001)=>rpc('tvtms_ticket_create',[JSON.stringify(await payload(changes)),actor]);
 const code=r=>r.error?.errorCode??r.errorCode;
@@ -59,30 +62,39 @@ test('adviser citation choices reuse seed equivalents and add only missing activ
  'Obstruction to traffic','Illegal stopping & parking','Disregarding traffic signs & signals',
  'Abandon/unattended vehicles or trailers on highways','Obstruction loading/unloading in prohibited zone',
  'Overloading','Motor vehicle racing','Refusal to convey passenger','Operating without permit/franchise','Others'];
- const rows=await query("select violation_name from public.violations where status='active'");
- for(const name of required)assert.equal(rows.filter(r=>r.violation_name===name).length,1,name);
- assert.equal((await query("select count(*) n from public.violations where status='active' and penalty_amount=150"))[0].n,27);
+ const rows=await query("select violation_name,violation_code,penalty_amount from public.violations where status='active' and is_citation_selectable");
+ assert.equal(rows.length,18);
+ assert.deepEqual(rows.map(r=>r.violation_name).sort(),required.sort());
+ assert.ok(rows.every(r=>Number(r.penalty_amount)===150));
+ assert.equal((await query("select count(*) n from public.violations where status='active' and penalty_amount=150"))[0].n,29);
+ assert.equal((await query("select count(*) n from public.violations where status='active' and not is_citation_selectable"))[0].n,11);
+ assert.equal((await query("select count(*) n from public.violations where violation_code='V001' and not is_citation_selectable"))[0].n,1);
  assert.equal((await query("select count(*) n from public.violations where violation_code='V002'"))[0].n,1);
  assert.equal((await query("select count(*) n from public.violations where violation_code='CUSTOM-HITCH'"))[0].n,1);
  assert.equal((await query("select count(*) n from public.violations where violation_code='TC007'"))[0].n,0);
+ for(const code of ['CUSTOM-INVALID','CUSTOM-DUI'])
+  assert.equal((await query('select is_citation_selectable from public.violations where violation_code=$1',[code]))[0].is_citation_selectable,false);
+ for(const code of ['TC002','TC008'])
+  assert.equal((await query('select is_citation_selectable from public.violations where violation_code=$1',[code]))[0].is_citation_selectable,true);
 });
 test('catalog enforces configured 150 on updates and inserts',async()=>{
  await db.exec("update public.violations set penalty_amount=9000 where id=1;");
  assert.equal((await query('select * from public.violations where penalty_amount<>150')).length,0);
  const v=(await query("insert into public.violations(violation_code,violation_name,penalty_amount) values('NEWTEST','Test additional violation',9999) returning *"))[0];
  assert.equal(Number(v.penalty_amount),150);
+ assert.equal(v.is_citation_selectable,false);
  await query('update public.violations set requires_description=true where id=$1',[v.id]);
 });
 test('single and multiple violations store separate 150 snapshots and one total',async()=>{
  for(let count=1;count<=4;count++){
-  const r=await issue({violation_ids:Array.from({length:count},(_,i)=>i+1),penalty_amount:0,effectivePenalty:9000});assert.ok(r.ticket,JSON.stringify(r));
+  const r=await issue({violation_ids:officialIds.slice(0,count),penalty_amount:0,effectivePenalty:9000});assert.ok(r.ticket,JSON.stringify(r));
   assert.equal(Number(r.ticket.penalty_amount),count*150);assert.equal(r.ticket.violations.length,count);
   assert.ok(r.ticket.violations.every(v=>Number(v.penalty_amount)===150));issued=r.ticket;
  }
 });
 test('same-plate counts are separate per violation, with no escalation',async()=>{
- const first=(await issue({plate_number:'REPEAT1',violation_ids:[1]})).ticket;
- const second=(await issue({plate_number:'REPEAT1',violation_ids:[1,2]})).ticket;
+ const first=(await issue({plate_number:'REPEAT1',violation_ids:[officialIds[0]]})).ticket;
+ const second=(await issue({plate_number:'REPEAT1',violation_ids:officialIds.slice(0,2)})).ticket;
  assert.equal(first.violations[0].same_violation_offense_count_at_issue,1);
  assert.deepEqual(second.violations.map(v=>v.same_violation_offense_count_at_issue),[2,1]);
  assert.equal(Number(second.penalty_amount),300);
@@ -93,9 +105,10 @@ test('duplicate citation and request replay rejected without extra rows',async()
  assert.equal((await query('select id from public.tickets where ticket_number=$1',[d.ticket_number])).length,1);
 });
 test('missing, invalid, duplicate and inactive violation selections rejected',async()=>{
- for(const violation_ids of [[],[999999],[1,1],['abc']])assert.ok(code(await issue({violation_ids})));
- await db.exec("update public.violations set status='inactive' where id=15");
- assert.equal(code(await issue({violation_ids:[15]})),'VIOLATION_UNAVAILABLE');
+ for(const violation_ids of [[],[999999],[officialIds[0],officialIds[0]],['abc']])assert.ok(code(await issue({violation_ids})));
+ assert.equal(code(await issue({violation_ids:[1]})),'VIOLATION_UNAVAILABLE');
+ await query("update public.violations set status='inactive' where id=$1",[officialIds[2]]);
+ assert.equal(code(await issue({violation_ids:[officialIds[2]]})),'VIOLATION_UNAVAILABLE');
 });
 test('only an active Officer can issue; admin/public/unknown IDs rejected',async()=>{
  for(const id of [9002,999999,null])assert.equal(code(await issue({},id)),'FORBIDDEN');
@@ -130,7 +143,7 @@ test('Others requires description but always uses configured flat penalty',async
 test('officer, driver, vehicle and violation snapshots survive profile/catalog edits',async()=>{
  const t=(await issue()).ticket;
  await query("update public.users set name='Changed Officer',officer_rank='Changed Rank' where id=9001");
- await query("update public.violations set violation_name='Changed Catalog Name' where id=1");
+ await query("update public.violations set violation_name='Changed Catalog Name' where id=$1",[officialIds[0]]);
  const detail=await rpc('tvtms_ticket_detail',[t.id]);assert.equal(detail.officer_name,'Test Officer');assert.equal(detail.officer_rank_at_issue,'Police Corporal');
  assert.equal(detail.violations[0].violation_name,t.violations[0].violation_name);assert.equal(detail.driver_email_at_issue,'driver@example.test');
  await assert.rejects(()=>query("update public.tickets set driver_email_at_issue='other@example.test' where id=$1",[t.id]),/immutable/);
@@ -179,9 +192,9 @@ test('expired dispute, reason boundaries and mismatched plate rejected',async()=
  await db.exec("update public.system_settings set setting_value='15' where setting_key='dispute_deadline_days'");
 });
 test('cancelled history does not increase future occurrence or leave a public balance',async()=>{
- const t=(await issue({plate_number:'CANCEL1',violation_ids:[1]})).ticket;
+ const t=(await issue({plate_number:'CANCEL1',violation_ids:[officialIds[0]]})).ticket;
  await query("update public.tickets set status='cancelled' where id=$1",[t.id]);
- const next=(await issue({plate_number:'CANCEL1',violation_ids:[1]})).ticket;assert.equal(next.violations[0].same_violation_offense_count_at_issue,1);
+ const next=(await issue({plate_number:'CANCEL1',violation_ids:[officialIds[0]]})).ticket;assert.equal(next.violations[0].same_violation_offense_count_at_issue,1);
  assert.equal(Number((await rpc('tvtms_public_lookup',[null,t.ticket_number]))[0].remaining_balance),0);
 });
 test('email claim uses driver snapshot, includes all violations/deadline, preserves retry ledger',async()=>{
