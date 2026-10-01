@@ -5,6 +5,9 @@ export const citationContextReady = context => {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(context.appearance_due_date ?? ''));
 };
 
+export const citationOfficerReady = context =>
+  Boolean(String(context?.officer_rank ?? '').trim());
+
 export const citationTotal = (selectedCount, context) =>
   citationContextReady(context) && selectedCount > 0
     ? selectedCount * Number(context.flat_penalty)

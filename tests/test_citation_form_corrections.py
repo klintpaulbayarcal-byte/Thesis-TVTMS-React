@@ -10,10 +10,11 @@ PHP = os.environ.get('TVTMS_PHP') or 'php'
 
 
 def test_pricing_helpers_reject_missing_configuration_and_calculate_flat_totals():
-    script = '''import {citationContextReady,citationTotal,citationDateTime} from './src/utils/citationForm.js';
+    script = '''import {citationContextReady,citationOfficerReady,citationTotal,citationDateTime} from './src/utils/citationForm.js';
 const valid={flat_penalty:150,date_issued:'2026-09-30',time_issued:'21:45:00',appearance_due_date:'2026-10-07'};
 console.log(JSON.stringify({valid:citationContextReady(valid),missing:citationContextReady(null),
 zero:citationContextReady({...valid,flat_penalty:0}),wrong:citationContextReady({...valid,flat_penalty:999}),
+rankMissing:citationOfficerReady(valid),rankBlank:citationOfficerReady({...valid,officer_rank:'   '}),rankPresent:citationOfficerReady({...valid,officer_rank:'Police Corporal'}),
 two:citationTotal(2,valid),three:citationTotal(3,valid),unavailable:citationTotal(2,null),
 empty:citationTotal(0,valid),time:citationDateTime(valid)}));'''
     result = subprocess.run(['node', '--input-type=module', '-e', script], cwd=ROOT,
@@ -22,6 +23,7 @@ empty:citationTotal(0,valid),time:citationDateTime(valid)}));'''
     data = json.loads(result.stdout)
     assert data['valid'] is True
     assert data['missing'] is False and data['zero'] is False and data['wrong'] is False
+    assert data['rankMissing'] is False and data['rankBlank'] is False and data['rankPresent'] is True
     assert data['two'] == 300 and data['three'] == 450
     assert data['unavailable'] is None and data['empty'] is None
     assert 'September 30, 2026' in data['time'] and '9:45' in data['time']

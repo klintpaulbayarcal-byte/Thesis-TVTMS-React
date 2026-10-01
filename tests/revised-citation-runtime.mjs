@@ -56,6 +56,15 @@ test('legacy stored amounts preserved; missing amounts frozen before catalog upd
  assert.equal((await query('select * from public.ticket_violations')).length,2);
  assert.equal((await query('select * from public.violation_penalty_rules where penalty_amount=9000')).length,1);
 });
+test('revised citation issuance requires a recorded officer rank',async()=>{
+ const before=(await query('select count(*) n from public.tickets'))[0].n;
+ for(const rank of [null,'   ']){
+  await query('update public.users set officer_rank=$1 where id=9001',[rank]);
+  assert.equal(code(await issue()),'OFFICER_RANK_REQUIRED');
+ }
+ assert.equal((await query('select count(*) n from public.tickets'))[0].n,before);
+ await db.exec("update public.users set officer_rank='Police Corporal' where id=9001;");
+});
 test('adviser citation choices reuse seed equivalents and add only missing active choices',async()=>{
  const required=["Not carrying driver's license","Driving with delinquent or invalid driver's license",'Driving without license',
  'Defective lighting accessory','Overspeeding','Reckless Driving','Hitching','Driving under the influence of liquor or drugs',

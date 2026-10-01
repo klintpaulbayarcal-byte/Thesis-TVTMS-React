@@ -8,7 +8,7 @@ import Icon from '../components/Icon';
 import Modal from '../components/Modal';
 import { firstArray, money } from '../utils/format';
 import { createRequestGate } from '../utils/requestGate';
-import { citationContextReady, citationDateTime, citationTotal } from '../utils/citationForm';
+import { citationContextReady, citationOfficerReady, citationDateTime, citationTotal } from '../utils/citationForm';
 import '../styles/citation-form.css';
 
 const initial = {
@@ -42,6 +42,7 @@ export default function IssueTicket() {
   const lookupGate = useRef(createRequestGate());
   const previewGate = useRef(createRequestGate());
   const pricingReady = citationContextReady(context);
+  const officerReady = citationOfficerReady(context);
 
   useEffect(() => {
     let active = true;
@@ -61,7 +62,7 @@ export default function IssueTicket() {
       const value = response.context ?? response.data;
       if (!citationContextReady(value)) throw new Error('The configured ₱150 citation penalty or Manila issuance time is unavailable.');
       setContext(value);
-      setContextError('');
+      setContextError(citationOfficerReady(value) ? '' : 'Officer rank is not recorded. Ask the Administrator to update your account before issuing citations.');
     }).catch(error => {
       if (!active) return;
       setContext(null);
@@ -153,7 +154,7 @@ export default function IssueTicket() {
   const historyItems = history?.violations ?? [];
   const nextPlateTicketCount = Number(history?.summary?.next_plate_ticket_count ?? historyItems.length + 1);
   const plateOutstanding = Number(history?.summary?.outstanding_balance ?? 0);
-  const ready = Boolean(pricingReady && catalogState === 'ready' && selected.length && preview &&
+  const ready = Boolean(pricingReady && officerReady && catalogState === 'ready' && selected.length && preview &&
     selected.every(v => preview[v.id]));
   const submit = async event => {
     event.preventDefault();
@@ -164,7 +165,12 @@ export default function IssueTicket() {
       const response = await API.citationContext();
       const fresh = response.context ?? response.data;
       if (!citationContextReady(fresh)) throw new Error('Citation pricing or time is unavailable.');
-      setContext(fresh); lookupGate.current.invalidate(); setReviewOpen(true);
+      setContext(fresh);
+      if (!citationOfficerReady(fresh)) {
+        setContextError('Officer rank is not recorded. Ask the Administrator to update your account before issuing citations.');
+        return;
+      }
+      setContextError(''); lookupGate.current.invalidate(); setReviewOpen(true);
     } catch (error) {
       setContext(null);
       setContextError(`Citation pricing is unavailable. ${error.message}`);
