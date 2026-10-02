@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "dev:isolated": "node scripts/dev-isolated.mjs",
     "dev": "concurrently -k \"npm run dev:api\" \"npm run dev:web\"",
     "dev:web": "vite --host 0.0.0.0",
     "dev:api": "\"C:/tools/php83/php.exe\" -S 127.0.0.1:8000 dev-router.php",

@@ -1,14 +1,14 @@
 # TVTMS revised citation release preparation
 
-**Status on 2026-10-01: NOT READY. This is a future runbook, not authorization to release.** No production SQL, records, migration history, Hostinger files, or GitHub branches were changed during this preparation.
+**Status on 2026-10-02: NOT READY. This is a future runbook, not authorization to release.** No production SQL, records, migration history, Hostinger files, or GitHub branches were changed during this preparation.
 
-> Real isolated Supabase/PostgREST staging compatibility was not performed because the optional paid development branch was declined.
+> Real isolated hosted Supabase/PostgREST staging was not performed because the optional paid development branch was declined.
 
 ## Verified baseline
 
 - Production Supabase project: `cwrhxvrmnfmzuxotsjrw` (TVTMS Production, Free plan). The owner's dashboard reports **Last Backup: No backups**. No restorable production database export has been verified.
 - Remote `sync-v4`: `f1c05fdb8dd1f42ab6b585c7311f44105cc2fcc9`. The latest successful [guarded Hostinger workflow](https://github.com/klintpaulbayarcal-byte/Thesis-TVTMS-React/actions/runs/36365343720) deployed that SHA and passed its homepage/API-health step. It is the best available application rollback SHA; the server files themselves do not expose a verified commit marker.
-- Current feature tip before this preparation: `cb8731cfe02d16c85a5ebe904eb8e0772c5be95a`; revised-citation commits are `cc5f150`, `018a3dd`, `213ae8c`, and `cb8731c`. Local release-preparation edits remain uncommitted. Nothing was pushed.
+- Current feature tip before the October 2 corrections: `253402c55f8c24163ca5608c18e9824452461a04` on `feature/revised-traffic-citation`. Revised-citation commits include `cc5f150`, `018a3dd`, `213ae8c`, and `cb8731c`. The final corrections and verification report are committed locally only. Nothing was pushed.
 - A source-only archive of the known-good `sync-v4` commit is at `artifacts/release-prep-20261001/sync-v4-source-f1c05fdb.zip` (SHA-256 `634CFB0BD263C6D01AA78295414618088D9D7AFA8AEAB3E0818F876320CE313E`). It excludes untracked Hostinger configuration, runtime files, and uploads, so it is **not** a server-files backup.
 - Read-only production counts: 14 tickets, 6 payments, 1 dispute, 2 evidence records, 32 notifications, 1 ticket-email notification, and 34 ticket-status-history records. There are zero null historical penalty snapshots, zero case-insensitive ticket-number collision groups, zero `TC001`–`TC018` code conflicts, and zero normalized violation-name duplicate groups. The pending backfill should create 14 historical `ticket_violations` rows.
 - Existing catalog: 15 active, zero inactive. The migration maps `V002` No License, `V004` Overspeeding, `V005` Reckless Driving, `V008` Illegal Parking, `V012` Disregarding Traffic Signs, and `V015` Defective Lights to six approved choices. It adds the other 12. The other nine legacy catalog rows remain available for historical/Admin use but are excluded from Officer selection. No inactive-equivalent conflict was found.
@@ -18,7 +18,7 @@
 
 Supabase [does not provide automatic daily backups for Free projects and recommends regular off-site `supabase db dump` exports](https://supabase.com/docs/guides/platform/backups). The current dashboard reports no backup. Before a migration, a trusted operator needs Supabase project access, the production Postgres password, the Dashboard **Connect** string (direct IPv6 or session pooler on IPv4), current Supabase CLI, Docker, and `psql` for a restore rehearsal. A service-role API key is not a database-backup credential. Obtain credentials through the Dashboard or a secret manager; never put them in Git, tickets, terminal transcripts, or the release report. [Supabase's CLI backup/restore guide](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore) is the reference procedure.
 
-On a trusted workstation, create a restricted directory **outside this repository** and link the CLI to the existing project. Confirm that `supabase link` targets `cwrhxvrmnfmzuxotsjrw`. The link/login process should prompt for credentials privately. These commands are read-only against production:
+On a trusted workstation, create a restricted directory **outside this repository** and use the direct database connection with existing credentials. Use the existing database credential privately. Follow [the updated manual backup steps](MANUAL_RELEASE_BACKUPS.md), which avoid creating/changing production CLI roles. The earlier linked-mode example below is retained as reference, not a preparation command to execute:
 
 ```text
 supabase link --project-ref cwrhxvrmnfmzuxotsjrw
@@ -31,7 +31,7 @@ supabase db dump --linked --schema supabase_migrations --use-copy --data-only -f
 
 Expected outputs are five non-empty SQL files: `roles.sql`, `schema.sql`, `data.sql`, `history_schema.sql`, and `history_data.sql`, plus an operator-created SHA-256 manifest and protected off-site copy. `schema.sql` should contain the application's public/private tables, functions, policies, and grants; `data.sql` should contain public application rows, including `public.users`, tickets, payments, disputes, settings, catalog, history, notifications, and `public.evidence.file_data`. The separate history files preserve the Supabase migration ledger. CLI dumps exclude Supabase-managed `auth` and `storage` schemas by default; Storage objects and any Hostinger runtime files need separate protection. Check the actual dump contents before accepting the backup. Do not print data or store these files in the repository.
 
-**Verification gate:** record file sizes/hashes, inspect the dump manifest without displaying personal rows, and restore the export to an isolated disposable environment. The restored database must contain the expected counts and required RPCs, policies, and grants. A downloaded file alone is **not** a verified restorable backup. This workspace currently lacks the CLI/Docker/Postgres runtime and the private database password, so the export and restore rehearsal were not performed here.
+**Verification gate:** record file sizes/hashes and inspect the dump scope/restore ordering without displaying personal rows. Validate it as far as safely possible; the declined paid hosted restore rehearsal is not required. The restored database must contain the expected counts and required RPCs, policies, and grants. A downloaded file alone is **not** a verified restorable backup. This workspace currently lacks the CLI/Docker/Postgres runtime and the private database password, so the export and restore rehearsal were not performed here.
 
 **Recovery procedure:** [Supabase's supported logical restore sequence](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore) uses a clean target Supabase project. Configure required extensions/webhooks first. With the target's `PGHOST`, `PGPORT`, `PGUSER`, `PGDATABASE`, and `PGPASSWORD` supplied privately through the operator's environment, run from the protected backup directory:
 
@@ -69,7 +69,7 @@ The authoritative RPC computes ₱150 × selected violations, stores separate im
 
 ## Future 30–45 minute release window
 
-**Before starting:** obtain a verified restorable database export, a verified Hostinger files backup, a confirmed write-free/maintenance control on the TVTMS subdomain, the official Officer rank, and explicit release approval. The current source has no built-in maintenance-mode switch; staff instructions alone cannot stop public writes. Confirm the hosting control actually rejects citation, payment, dispute, and Admin mutations for normal users while allowing only named release operators to perform the later rank update and approved smoke tests. If this cannot be enforced, postpone the migration.
+**Before starting:** obtain a verified restorable database export, a verified Hostinger files backup, a confirmed write-free/maintenance control on the TVTMS subdomain, the official Officer rank, and explicit release approval. The reviewed `api/.htaccess` now includes a reversible marker/cookie write gate, verified on local Apache. See [the gate procedure](RELEASE_WRITE_GATE.md); it has not been installed or enabled on Hostinger. Staff instructions alone cannot stop public writes. Confirm the hosting control actually rejects citation, payment, dispute, and Admin mutations for normal users while allowing only named release operators to perform the later rank update and approved smoke tests. If this cannot be enforced, postpone the migration.
 
 1. **T−15 to T0:** Announce a low-use window. Record live counts and the remote `sync-v4` SHA. Finish and verify the database export and Hostinger snapshot. Keep private credentials out of logs.
 2. **T0:** Activate the tested maintenance/write-free control. Confirm write routes are unavailable to normal users. No citations, payments, disputes, or Admin edits during the database/application version gap.
@@ -84,6 +84,6 @@ The authoritative RPC computes ₱150 × selected violations, stores separate im
 
 ## Current verification and open gates
 
-- Local: `npm test` **244 passed**; direct isolated PostgreSQL runtime **25/25 passed**; JSX/import verification **55 files passed**; PHP lint **25/25 files passed**; Vite production build and Hostinger package build passed.
+- Local October 2: `npm test` **266 passed**; direct isolated PostgreSQL runtime **27/27 passed**; JSX/import verification **55 files passed**; PHP lint **27/27 files passed**; Vite production build and Hostinger package build passed. Seven isolated HTTP smoke groups and the real local Apache write-gate test passed. Manual browser QA remains blocked by unavailable browser/native helper tools. See [safe local QA](LOCAL_ISOLATED_QA.md).
 - Production: all checks in this document were read-only. No revised migration, rank update, history repair, push, merge, email, or deployment occurred.
-- Open gates resolvable without a paid branch: create and rehearse a restorable production database export; capture and verify current Hostinger files; establish a tested maintenance/write-free control. The declined paid staging branch is an acknowledged limitation, not a request to create one.
+- Open gates resolvable without a paid branch: obtain/check a restorable production database export; capture/verify current Hostinger files; complete isolated browser QA; verify the prepared write gate on Hostinger after authorization and before schema mutation. Exact manual backup steps are in [MANUAL_RELEASE_BACKUPS.md](MANUAL_RELEASE_BACKUPS.md). The declined paid staging branch is an acknowledged limitation, not a request to create one.

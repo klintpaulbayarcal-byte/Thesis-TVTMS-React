@@ -115,7 +115,7 @@ export default function PublicTicketLookup(){
           <div className="form-group">
             <label htmlFor="publicLookupInput">{mode==='plate'?'Plate Number':'Citation Number'}</label>
             <input id="publicLookupInput" className="form-control" required minLength="1" maxLength="30" placeholder={mode==='plate'?'e.g. ABC1234':'e.g. 7258'} value={query} onChange={e=>{setQuery(e.target.value.toUpperCase());resetDispute();}}/>
-            <div className="hint">{mode==='plate'?'Enter the plate number printed on your vehicle registration.':'The citation number is printed at the top of your violation ticket slip.'}</div>
+            <div className="hint">{mode==='plate'?'Enter the plate number printed on your vehicle registration.':'Enter the citation number shown in your official citation record or notification.'}</div>
           </div>
           <button className="btn-search" disabled={busy}>{busy?'Checking…':mode==='plate'?'Search Tickets':'Find My Ticket'}</button>
         </form>

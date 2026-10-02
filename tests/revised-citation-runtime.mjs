@@ -94,6 +94,35 @@ test('catalog enforces configured 150 on updates and inserts',async()=>{
  assert.equal(v.is_citation_selectable,false);
  await query('update public.violations set requires_description=true where id=$1',[v.id]);
 });
+test('all 18 official choices reject identity, activation, removal and selection drift',async()=>{
+ const before=await query('select * from public.violations where is_citation_selectable order by id');
+ for(const row of before) {
+  for(const sql of ["violation_name='Renamed'","violation_code='DRIFT'","status='inactive'",
+    'is_citation_selectable=false',`requires_description=${!row.requires_description}`]) {
+   await assert.rejects(()=>query(`update public.violations set ${sql} where id=$1`,[row.id]),/protected/);
+  }
+  await assert.rejects(()=>query('delete from public.violations where id=$1',[row.id]),/cannot be deleted/);
+  await query("update public.violations set description='Test metadata',demerit_points=1 where id=$1",[row.id]);
+ }
+ await assert.rejects(()=>query('update public.violations set is_citation_selectable=true where id=1'),/protected/);
+ await assert.rejects(()=>query("insert into public.violations(violation_code,violation_name,penalty_amount,is_citation_selectable) values('DRIFT','Extra',150,true)"),/protected/);
+ const after=await query('select * from public.violations where is_citation_selectable order by id');
+ assert.equal(after.length,18);
+ for(let i=0;i<18;i++)for(const key of ['violation_name','violation_code','status','requires_description'])assert.equal(after[i][key],before[i][key]);
+});
+test('blank license is null; supported classifications are intentional; vehicle must be selected',async()=>{
+ for(const license_type of ['',null,'Professional','Non-Professional','Student Permit / SP','Others']) {
+  const result=await issue({license_type,license_type_other:'Custom classification',driver_license_number:''});
+  assert.ok(result.ticket,JSON.stringify(result));
+  assert.equal(result.ticket.license_type,license_type||null);
+  assert.equal(result.ticket.license_type_other,license_type==='Others'?'Custom classification':null);
+ }
+ for(const input of [{license_type:'Others',license_type_other:''},{license_type:'Invented'},
+   {vehicle_type:''},{vehicle_type:null},{vehicle_type:'spaceship'}]) {
+  assert.equal(code(await issue(input)),'VALIDATION_ERROR');
+ }
+ for(const vehicle_type of ['motorcycle','tricycle','car','truck','bus','van'])assert.ok((await issue({vehicle_type})).ticket);
+});
 test('single and multiple violations store separate 150 snapshots and one total',async()=>{
  for(let count=1;count<=4;count++){
   const r=await issue({violation_ids:officialIds.slice(0,count),penalty_amount:0,effectivePenalty:9000});assert.ok(r.ticket,JSON.stringify(r));
@@ -116,8 +145,7 @@ test('duplicate citation and request replay rejected without extra rows',async()
 test('missing, invalid, duplicate and inactive violation selections rejected',async()=>{
  for(const violation_ids of [[],[999999],[officialIds[0],officialIds[0]],['abc']])assert.ok(code(await issue({violation_ids})));
  assert.equal(code(await issue({violation_ids:[1]})),'VIOLATION_UNAVAILABLE');
- await query("update public.violations set status='inactive' where id=$1",[officialIds[2]]);
- assert.equal(code(await issue({violation_ids:[officialIds[2]]})),'VIOLATION_UNAVAILABLE');
+ await assert.rejects(()=>query("update public.violations set status='inactive' where id=$1",[officialIds[2]]),/protected/);
 });
 test('only an active Officer can issue; admin/public/unknown IDs rejected',async()=>{
  for(const id of [9002,999999,null])assert.equal(code(await issue({},id)),'FORBIDDEN');
@@ -152,7 +180,7 @@ test('Others requires description but always uses configured flat penalty',async
 test('officer, driver, vehicle and violation snapshots survive profile/catalog edits',async()=>{
  const t=(await issue()).ticket;
  await query("update public.users set name='Changed Officer',officer_rank='Changed Rank' where id=9001");
- await query("update public.violations set violation_name='Changed Catalog Name' where id=$1",[officialIds[0]]);
+ await query("update public.violations set description='Changed Catalog Description' where id=$1",[officialIds[0]]);
  const detail=await rpc('tvtms_ticket_detail',[t.id]);assert.equal(detail.officer_name,'Test Officer');assert.equal(detail.officer_rank_at_issue,'Police Corporal');
  assert.equal(detail.violations[0].violation_name,t.violations[0].violation_name);assert.equal(detail.driver_email_at_issue,'driver@example.test');
  await assert.rejects(()=>query("update public.tickets set driver_email_at_issue='other@example.test' where id=$1",[t.id]),/immutable/);

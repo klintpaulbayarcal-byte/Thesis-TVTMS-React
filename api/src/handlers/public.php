@@ -75,7 +75,7 @@ function public_dispute(array $params=[]): never
 }
 function public_violations(array $params=[]): never
 {
-    $rows=supabase_select('violations',['status'=>'eq.active'],['select'=>'violation_code,violation_name,description,penalty_amount,demerit_points','order'=>'violation_code.asc']);
+    $rows=supabase_select('violations',['status'=>'eq.active','is_citation_selectable'=>'eq.true'],['select'=>'violation_code,violation_name,description,penalty_amount','order'=>'violation_name.asc,id.asc']);
     json_response(['success'=>true,'violations'=>$rows]);
 }
 function public_contact(array $params=[]): never

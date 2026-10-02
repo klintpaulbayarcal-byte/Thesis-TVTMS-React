@@ -154,6 +154,37 @@ begin
 end;
 $catalog$;
 
+-- Install after the one-time alignment. Normal API/service-role writes cannot
+-- redefine the approved checklist or promote extra legacy rows into it.
+create function private.protect_official_citation_catalog() returns trigger
+language plpgsql security invoker set search_path='' as $$
+begin
+ if TG_OP='DELETE' then
+   if old.is_citation_selectable then
+     raise exception 'Official citation choices cannot be deleted' using errcode='23514';
+   end if;
+   return old;
+ end if;
+ if TG_OP='INSERT' then
+   if new.is_citation_selectable then
+     raise exception 'Official citation checklist is protected' using errcode='23514';
+   end if;
+ elsif new.is_citation_selectable is distinct from old.is_citation_selectable
+    or (old.is_citation_selectable and
+       (new.violation_code is distinct from old.violation_code
+        or new.violation_name is distinct from old.violation_name
+        or new.status is distinct from old.status
+        or new.requires_description is distinct from old.requires_description)) then
+   raise exception 'Official citation identity and selection behavior are protected' using errcode='23514';
+ end if;
+ return new;
+end; $$;
+-- Alphabetical trigger order: protect inputs before flat-penalty normalization.
+create trigger violations_approved_catalog before insert or update or delete on public.violations
+for each row execute function private.protect_official_citation_catalog();
+revoke all on function private.protect_official_citation_catalog() from public,anon,authenticated;
+grant execute on function private.protect_official_citation_catalog() to service_role;
+
 create function private.protect_citation_snapshots() returns trigger
 language plpgsql security invoker set search_path='' as $$
 begin
@@ -241,7 +272,7 @@ begin
  or coalesce(length(trim(p_data->>'driver_nationality')),0) not between 1 and 100
  or coalesce(length(trim(p_data->>'driver_email')),0) not between 3 and 190
  or coalesce(p_data->>'driver_email','') !~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'
- or coalesce(p_data->>'license_type','') not in ('Professional','Non-Professional','Student Permit / SP','Others')
+ or coalesce(p_data->>'license_type','') not in ('','Professional','Non-Professional','Student Permit / SP','Others')
  or (p_data->>'license_type'='Others' and coalesce(length(trim(p_data->>'license_type_other')),0) not between 1 and 100)
  or coalesce(length(trim(p_data->>'vehicle_make')),0) not between 1 and 100
  or coalesce(length(trim(p_data->>'owner_name')),0) not between 1 and 100
@@ -296,7 +327,7 @@ begin
  violation_latitude,violation_longitude)
  values(num,p_user_id,vehicle.id,ids[1],unit*cardinality(ids),now_manila::date,now_manila::time,p_data->>'location',nullif(p_data->>'remarks',''),count_plate,first_offense,2,
  trim(p_data->>'driver_first_name'),nullif(trim(p_data->>'driver_middle_name'),''),trim(p_data->>'driver_last_name'),trim(p_data->>'driver_address'),trim(p_data->>'driver_nationality'),lower(trim(p_data->>'driver_email')),
- p_data->>'license_type',nullif(p_data->>'license_type_other',''),nullif(p_data->>'driver_license_number',''),plate,p_data->>'vehicle_type',p_data->>'vehicle_make',
+ nullif(p_data->>'license_type',''),case when p_data->>'license_type'='Others' then trim(p_data->>'license_type_other') else null end,nullif(p_data->>'driver_license_number',''),plate,p_data->>'vehicle_type',p_data->>'vehicle_make',
  p_data->>'owner_name',p_data->>'owner_address',actor.name,actor.officer_rank,now_manila::date,now_manila::time,now_manila::date+7,
  (p_data->>'violation_latitude')::numeric,(p_data->>'violation_longitude')::numeric) returning * into ticket;
  insert into public.ticket_violations(ticket_id,violation_id,violation_code_at_issue,violation_name_at_issue,penalty_amount_at_issue,same_violation_offense_count_at_issue,description_at_issue,snapshot_origin)

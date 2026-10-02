@@ -125,11 +125,17 @@ function citation_input(array $b): array
         if(!is_string($value)||text_length(trim($value))>$limit)fail('Invalid citation field: '.$key,400,'VALIDATION_ERROR');
         $data[$key]=trim($value);
     }
-    foreach(['ticket_number','plate_number','vehicle_type','vehicle_make','driver_first_name','driver_last_name','driver_address','driver_nationality','driver_email','license_type','owner_name','owner_address','location','expected_date'] as $key){
+    foreach(['ticket_number','plate_number','vehicle_type','vehicle_make','driver_first_name','driver_last_name','driver_address','driver_nationality','driver_email','owner_name','owner_address','location','expected_date'] as $key){
         if($data[$key]==='')fail('Complete the required citation information.',400,'VALIDATION_ERROR');
     }
     $data['ticket_number']=strtoupper($data['ticket_number']);$data['plate_number']=normalize_plate($data['plate_number']);
     $data['driver_email']=normalize_email($data['driver_email']);
+    if (!in_array($data['vehicle_type'], ['motorcycle','tricycle','car','truck','bus','van'], true)
+        || !in_array($data['license_type'], ['', 'Professional','Non-Professional','Student Permit / SP','Others'], true)
+        || ($data['license_type'] === 'Others' && $data['license_type_other'] === '')) {
+        fail('Select a vehicle type and a valid license classification if applicable. Specify Others when selected.',400,'VALIDATION_ERROR');
+    }
+    if ($data['license_type'] !== 'Others') $data['license_type_other'] = '';
     if(!filter_var($data['driver_email'],FILTER_VALIDATE_EMAIL)||!preg_match('/^[A-Z0-9][A-Z0-9\/-]{0,29}$/',$data['ticket_number']))fail('Provide a valid citation number and driver email.',400,'VALIDATION_ERROR');
     $ids=$b['violation_ids']??null;
     if(!is_array($ids)||!array_is_list($ids)||count($ids)<1||count($ids)>100)fail('Select one or more active violations.',400,'VALIDATION_ERROR');

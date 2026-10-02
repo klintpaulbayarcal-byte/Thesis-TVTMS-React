@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/development_safety.php';
 
 function app_config(): array
 {
@@ -11,6 +12,9 @@ function app_config(): array
         if (!is_file($path)) throw new RuntimeException('Missing api/config/config.php');
         $loaded = require $path;
         if (!is_array($loaded)) throw new RuntimeException('Invalid API configuration.');
+        if ($error = development_configuration_error($loaded)) {
+            fail($error, 503, 'DEVELOPMENT_DATABASE_BLOCKED');
+        }
         $config = $loaded;
         date_default_timezone_set((string)($config['timezone'] ?? 'Asia/Manila'));
     }

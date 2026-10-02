@@ -12,10 +12,10 @@ import { citationContextReady, citationOfficerReady, citationDateTime, citationT
 import '../styles/citation-form.css';
 
 const initial = {
-  ticket_number: '', plate_number: '', vehicle_type: 'motorcycle', vehicle_make: '',
+  ticket_number: '', plate_number: '', vehicle_type: '', vehicle_make: '',
   owner_name: '', owner_address: '', driver_first_name: '', driver_middle_name: '',
   driver_last_name: '', driver_address: '', driver_nationality: '', driver_email: '',
-  license_type: 'Non-Professional', license_type_other: '', driver_license_number: '',
+  license_type: '', license_type_other: '', driver_license_number: '',
   location: '', remarks: '', violation_ids: [], violation_descriptions: {},
   violation_latitude: null, violation_longitude: null,
 };
@@ -113,7 +113,6 @@ export default function IssueTicket() {
       const vehicle = response.vehicle ?? response.data?.vehicle;
       // A matching plate never supplies a new driver's identity or email.
       if (vehicle) setForm(current => ({ ...current,
-        vehicle_type: vehicle.vehicle_type || current.vehicle_type,
         vehicle_make: vehicle.vehicle_make || current.vehicle_make,
         owner_name: vehicle.owner_name || current.owner_name,
         owner_address: vehicle.owner_address || current.owner_address,
@@ -213,7 +212,7 @@ export default function IssueTicket() {
     ['Cited driver', [form.driver_first_name, form.driver_middle_name, form.driver_last_name].filter(Boolean).join(' ')],
     ['Driver email — notice recipient', form.driver_email], ['Driver address', form.driver_address],
     ['Nationality', form.driver_nationality],
-    ['License classification', form.license_type === 'Others' ? form.license_type_other : form.license_type],
+    ['License classification', form.license_type === 'Others' ? form.license_type_other : form.license_type || 'Not applicable / not recorded'],
     ['Driver license', form.driver_license_number || 'Not provided'],
     ['Plate', form.plate_number], ['Vehicle type / make', `${form.vehicle_type} / ${form.vehicle_make}`],
     ['Registered owner', form.owner_name], ['Owner address', form.owner_address],
@@ -238,7 +237,8 @@ export default function IssueTicket() {
           <div className="form-grid">{field('driver_first_name', 'First Name')}{field('driver_middle_name', 'Middle Name', { required: false })}
             {field('driver_last_name', 'Last Name')}{field('driver_address', 'Address', { maxLength: 2000 })}
             {field('driver_nationality', 'Nationality')}{field('driver_email', 'Driver Email', { type: 'email', maxLength: 190 })}
-            <label className="field"><span>License Classification / Type *</span><select value={form.license_type} onChange={event => set('license_type', event.target.value)}>
+            <label className="field"><span>License Classification / Type (if applicable)</span><select value={form.license_type} onChange={event => setForm(current => ({ ...current, license_type: event.target.value, license_type_other: '' }))}>
+              <option value="">Select if applicable</option>
               {['Professional', 'Non-Professional', 'Student Permit / SP', 'Others'].map(value => <option key={value}>{value}</option>)}
             </select></label>
             {form.license_type === 'Others' && field('license_type_other', 'Specify License Classification')}
@@ -251,7 +251,8 @@ export default function IssueTicket() {
             <input required maxLength="20" value={form.plate_number} onChange={plateChanged} onBlur={lookup}/>
             <button type="button" className="btn btn-secondary btn-sm" onClick={lookup}>Lookup</button>
           </div></label>
-            <label className="field"><span>Vehicle Type *</span><select value={form.vehicle_type} onChange={event => set('vehicle_type', event.target.value)}>
+            <label className="field"><span>Vehicle Type *</span><select required value={form.vehicle_type} onChange={event => set('vehicle_type', event.target.value)}>
+              <option value="" disabled>Select vehicle type</option>
               {['motorcycle', 'tricycle', 'car', 'truck', 'bus', 'van'].map(value => <option key={value} value={value}>{value}</option>)}
             </select></label>
             {field('vehicle_make', 'Make of Vehicle')}{field('owner_name', 'Owner Name')}
