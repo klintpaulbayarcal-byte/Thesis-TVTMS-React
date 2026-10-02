@@ -34,6 +34,7 @@ adapter.once('message',message=>{
   start(php,['-S','127.0.0.1:8000','dev-router.php']);
   start(process.execPath,['node_modules/vite/bin/vite.js','--host','127.0.0.1','--port','5173','--strictPort']);
   console.log('Isolated QA: http://localhost:5173');
-  console.log('Test accounts: officer@local.test / admin@local.test; password: LocalTestPass123!');
+  console.log('TEST-ONLY local QA accounts: officer@local.test / admin@local.test; password: LocalTestPass123!');
+  console.log('Disposable fixtures only. Never copy them to production or use them as replacements for real accounts.');
   console.log('SMTP disabled. Fresh disposable database on every start. Ctrl+C stops all QA processes.');
 });

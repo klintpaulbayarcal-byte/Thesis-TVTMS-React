@@ -31,9 +31,10 @@ if (!fs.existsSync(path.join(here, 'initialized'))) {
   }
   const php = spawnSync(process.env.TVTMS_PHP, ['-r', "echo password_hash('LocalTestPass123!', PASSWORD_BCRYPT);"], {encoding:'utf8'});
   if (php.status !== 0 || !php.stdout.startsWith('$2')) throw new Error('Unable to create local-only test password hash');
+  // New local fixtures only: existing application role values, no real account import/update.
   await q('insert into public.users(name,email,password,role,officer_rank) values ($1,$2,$3,$4,$5),($6,$7,$3,$8,null)',
-    ['Local Test Officer','officer@local.test',php.stdout,'apprehending_officer','TEST ONLY RANK','Local Test Admin','admin@local.test','admin']);
-  fs.writeFileSync(path.join(here,'initialized'),'all migrations applied, test accounts seeded\n');
+    ['TEST-ONLY Apprehending Officer (Local QA)','officer@local.test',php.stdout,'apprehending_officer','TEST ONLY RANK','TEST-ONLY Administrator (Local QA)','admin@local.test','admin']);
+  fs.writeFileSync(path.join(here,'initialized'),'all migrations applied, TEST-ONLY local QA accounts seeded\n');
 }
 
 function predicates(search, start=0) {
