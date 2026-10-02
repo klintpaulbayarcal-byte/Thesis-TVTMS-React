@@ -74,8 +74,8 @@ def test_staff_ui_separates_plate_sequence_penalty_level_and_outstanding():
     detail = source('src/pages/TicketDetails.jsx')
     for label in [
         'Plate Ticket Count at Issuance',
-        'Same-Plate/Same-Violation Penalty Level',
-        'New Ticket Penalty',
+        'Same-plate/same-violation occurrence:',
+        'Total Citation Penalty',
         'Current Plate Outstanding',
     ]:
         assert label in issue

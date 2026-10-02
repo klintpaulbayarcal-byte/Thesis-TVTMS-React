@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Icon from './Icon';
 const names={
- '/admin':'Dashboard','/admin/overview':'System Overview','/admin/tickets':'All Tickets','/admin/users':'Manage Users','/admin/violations':'Manage Violations','/admin/payments':'Payments','/admin/disputes':'Disputes','/admin/reports':'Reports','/admin/analytics':'Analytics','/admin/audit-logs':'Audit Trail','/admin/settings':'System Settings','/officer':'Dashboard','/officer/issue-ticket':'Issue Ticket','/officer/tickets':'My Tickets','/officer/lookup':'Search Violator','/notifications':'Notifications','/profile':'My Profile'
+ '/admin':'Dashboard','/admin/overview':'System Overview','/admin/tickets':'All Tickets','/admin/users':'Manage Users','/admin/violations':'Manage Violations','/admin/payments':'Payments','/admin/disputes':'Disputes','/admin/reports':'Reports','/admin/analytics':'Analytics','/admin/audit-logs':'Audit Trail','/admin/settings':'System Settings','/officer':'Dashboard','/officer/issue-ticket':'Issue Traffic Citation','/officer/tickets':'My Tickets','/officer/lookup':'Search Violator','/notifications':'Notifications','/profile':'My Profile'
 };
 export default function Topbar({ onMenu }) {
   const { user, logout }=useAuth(); const {pathname}=useLocation();

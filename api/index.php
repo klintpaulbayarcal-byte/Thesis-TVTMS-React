@@ -7,6 +7,8 @@ header('Referrer-Policy: no-referrer');
 header("Permissions-Policy: geolocation=(self), camera=(self)");
 
 require_once __DIR__ . '/src/common.php';
+// Validate local safety before authentication, rate limiting, health or database I/O.
+app_config();
 require_once __DIR__ . '/src/router.php';
 foreach (glob(__DIR__ . '/src/handlers/*.php') ?: [] as $handlerFile) {
     require_once $handlerFile;
@@ -42,6 +44,7 @@ if ($route['handler'] === 'health') {
             'databaseClient' => 'supabase-postgresql',
             'smtp' => smtp_configuration_status(app_config()['smtp']??[])==='configured' ? 'configured' : 'not_configured',
             'deployment' => !empty(app_config()['development']) ? 'development' : 'production',
+            'isolatedDevelopment' => PHP_SAPI === 'cli-server' && !empty(app_config()['isolated_development']),
             'runtime' => 'php',
             'capabilities' => ['react-static-frontend','supabase-postgresql','ticket-permanent-delete','ticket-mark-unpaid','payment-state-audit'],
             'timestamp' => date(DATE_ATOM),

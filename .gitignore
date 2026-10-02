@@ -2,6 +2,7 @@ node_modules/
 dist/
 deploy/
 api/config/config.local.php
+api/.release-*
 .env
 .env.*
 !.env.example

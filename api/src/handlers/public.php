@@ -25,6 +25,7 @@ function public_ticket_lookup(array $params=[]): never
         $msg=public_dispute_eligibility_message($t);
         $t=['ticket_number'=>$t['ticket_number']??null,'plate_number'=>$t['plate_number']??null,'vehicle_type'=>$t['vehicle_type']??null,
             'violation_code'=>$t['violation_code']??null,'violation_name'=>$t['violation_name']??null,'date_issued'=>$t['date_issued']??null,
+            'appearance_due_date'=>$t['appearance_due_date']??null,'violations'=>array_map(static fn($v)=>['violation_code'=>$v['violation_code']??null,'violation_name'=>$v['violation_name']??null,'penalty_amount'=>$v['penalty_amount']??0],is_array($t['violations']??null)?$t['violations']:[]),
             'status'=>$t['payment_status']??$t['status']??'unpaid','payment_date'=>$t['payment_date']??null,
             'penalty_amount'=>$t['penalty_amount']??0,'total_paid'=>$t['total_paid']??0,'remaining_balance'=>$t['remaining_balance']??0,
             'has_recorded_payment'=>!empty($t['has_recorded_payment'])||(float)($t['total_paid']??0)>0,
@@ -74,7 +75,7 @@ function public_dispute(array $params=[]): never
 }
 function public_violations(array $params=[]): never
 {
-    $rows=supabase_select('violations',['status'=>'eq.active'],['select'=>'violation_code,violation_name,description,penalty_amount,demerit_points','order'=>'violation_code.asc']);
+    $rows=supabase_select('violations',['status'=>'eq.active','is_citation_selectable'=>'eq.true'],['select'=>'violation_code,violation_name,description,penalty_amount','order'=>'violation_name.asc,id.asc']);
     json_response(['success'=>true,'violations'=>$rows]);
 }
 function public_contact(array $params=[]): never

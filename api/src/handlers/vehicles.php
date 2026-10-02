@@ -23,6 +23,7 @@ function vehicles_lookup(array $params = []): never
         'id' => (int)$v['id'],
         'plate_number' => $v['plate_number'],
         'vehicle_type' => $v['vehicle_type'],
+        'vehicle_make' => $v['vehicle_make'] ?? null,
         'owner_name' => $v['owner_name'] ?? null,
         'owner_email' => $v['owner_email'] ?? null,
         'owner_address' => $v['owner_address'] ?? null,

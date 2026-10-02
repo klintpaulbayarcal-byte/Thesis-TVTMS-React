@@ -31,6 +31,7 @@ function api_routes(): array
         ['GET', '#^/api/violations/?$#', 'violations_list'],
         ['POST', '#^/api/violations/?$#', 'violations_create'],
 
+        ['GET', '#^/api/tickets/issuance-context/?$#', 'tickets_citation_context'],
         ['GET', '#^/api/tickets/stats/?$#', 'tickets_stats'],
         ['GET', '#^/api/tickets/search/?$#', 'tickets_search'],
         ['POST', '#^/api/tickets/(?P<id>\d+)/notification/retry/?$#', 'tickets_retry_notification'],

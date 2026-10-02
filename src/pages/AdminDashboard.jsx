@@ -7,13 +7,13 @@ import Notice from '../components/Notice';
 import StatCard from '../components/StatCard';
 import Icon from '../components/Icon';
 import { useAuth } from '../context/AuthContext';
-import { firstArray, firstObject, dateOnly, money } from '../utils/format';
+import { firstArray, firstObject, dateOnly, money, manilaDateKey, manilaDaysAgo } from '../utils/format';
 import { displayLocation } from '../utils/locationLabel';
 
 export default function AdminDashboard(){
  const [stats,setStats]=useState({}); const [tickets,setTickets]=useState([]); const [barangays,setBarangays]=useState([]); const [hotspots,setHotspots]=useState([]); const [error,setError]=useState(''); const [loading,setLoading]=useState(true); const [statsLoaded,setStatsLoaded]=useState(false); const nav=useNavigate(); const {user}=useAuth();
  useEffect(()=>{let active=true;
-   Promise.allSettled([API.ticketStats(),API.tickets({page:1,pageSize:8}),API.report('barangay'),API.report('hotspots',{startDate:new Date(Date.now()-30*86400000).toISOString().slice(0,10),endDate:new Date().toISOString().slice(0,10)})]).then(results=>{
+   Promise.allSettled([API.ticketStats(),API.tickets({page:1,pageSize:8}),API.report('barangay'),API.report('hotspots',{startDate:manilaDaysAgo(30),endDate:manilaDateKey()})]).then(results=>{
      if(!active)return;
      const [s,t,b,h]=results;
      if(s.status==='fulfilled'){setStats(firstObject(s.value,['stats']));setStatsLoaded(true);}
@@ -31,7 +31,7 @@ export default function AdminDashboard(){
    return rows.filter(row=>row.count>0);
  },[barangays,hotspots]);
  const maxRisk=Math.max(1,...riskRows.map(r=>r.count));
- const columns=[{key:'ticket_number',label:'Ticket #'},{key:'date_issued',label:'Date',render:r=>dateOnly(r.date_issued)},{key:'plate_number',label:'Plate Number'},{key:'violation_name',label:'Violation'},{key:'penalty_amount',label:'Penalty',render:r=>money(r.penalty_amount_at_issue??r.penalty_amount)},{key:'status',label:'Status',render:r=><StatusBadge value={r.status}/>}];
+ const columns=[{key:'ticket_number',label:'Citation Number'},{key:'date_issued',label:'Date',render:r=>dateOnly(r.date_issued)},{key:'plate_number',label:'Plate Number'},{key:'violation_name',label:'Violation'},{key:'penalty_amount',label:'Penalty',render:r=>money(r.penalty_amount_at_issue??r.penalty_amount)},{key:'status',label:'Status',render:r=><StatusBadge value={r.status}/>}];
  const repeat=stats.repeatOffenders??stats.repeat_offenders??0; const unpaid=Number(stats.unpaid??0); const paid=Number(stats.paid??0); const total=Number(stats.total??0); const revenue=Number(stats.revenue??0);
  return <div className="admin-dashboard-restored">
    <Notice type="error">{error}</Notice>

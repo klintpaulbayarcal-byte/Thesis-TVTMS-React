@@ -9,12 +9,9 @@ DETAILS = (ROOT / "src/pages/TicketDetails.jsx").read_text(encoding="utf-8")
 
 def test_issue_ticket_reports_persistence_before_server_notification_outcome():
     assert "response.notification" in ISSUE
-    assert re.search(
-        r"text:`Ticket \$\{ticket\?\.ticket_number\|\|''\} issued successfully\. \$\{notification\.message",
-        ISSUE,
-    )
-    assert "No email notification status was returned." in ISSUE
-    assert "notification.status==='accepted'||notification.status==='already_accepted'" in ISSUE
+    assert 'Citation ${ticket.ticket_number} issued.' in ISSUE
+    assert 'response.notification?.message' in ISSUE
+    assert 'setIssued(true)' in ISSUE
     assert "setReviewOpen(false)" in ISSUE
     assert "2500" in ISSUE
     assert not re.search(r"issued successfully\.[^`'\"]*email (?:was )?sent", ISSUE, re.IGNORECASE)

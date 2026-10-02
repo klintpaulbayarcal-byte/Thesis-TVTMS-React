@@ -15,7 +15,12 @@ fs.mkdirSync(deploy, { recursive: true });
 
 function copy(src, dst) {
   if (!fs.existsSync(src)) return;
-  fs.cpSync(src, dst, { recursive: true });
+  fs.cpSync(src, dst, {
+    recursive: true,
+    // Do not even read/copy the private override into the assembled artifact.
+    filter: source => path.basename(source) !== 'config.local.php'
+      && !path.basename(source).startsWith('.release-'),
+  });
 }
 
 copy(dist, deploy);

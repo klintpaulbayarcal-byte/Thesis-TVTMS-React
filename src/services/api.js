@@ -105,23 +105,17 @@ export const API = {
 
   tickets: filters => apiRequest(`/tickets${qs(filters) ? `?${qs(filters)}` : ''}`),
   ticket: id => apiRequest(`/tickets/${id}`),
-  createTicket: data => {
-    const recipient=String(data?.owner_email??'').trim();
-    // Plate history may belong to a prior owner; always ask at the final send boundary.
-    // Declining email never prevents ticket creation.
-    const recipient_email_confirmed=Boolean(recipient&&typeof window!=='undefined'&&typeof window.confirm==='function'&&
-      window.confirm(`Email notification is optional. Please verify the intended recipient for this specific ticket:\n${recipient}\n\nOnly confirm if you checked that this address belongs to the intended recipient. Press Cancel to issue the ticket WITHOUT sending email.`));
-    return apiRequest('/tickets', { method: 'POST', body: JSON.stringify({...data,recipient_email_confirmed}) });
-  },
+  citationContext: () => apiRequest('/tickets/issuance-context'),
+  createTicket: data => apiRequest('/tickets', { method: 'POST', body: JSON.stringify(data) }),
   retryTicketNotification: (id, data) => {
     let confirmation=data;
     if(!confirmation){
       if(typeof window==='undefined'||typeof window.prompt!=='function')return Promise.resolve(notificationCancelled());
-      const entered=window.prompt('Enter the intended recipient email for THIS ticket. Do not assume the previous vehicle owner still owns the plate:');
+      const entered=window.prompt('Enter the recipient email recorded when this citation was issued. For a new citation, use the cited driver email shown in its details:');
       const recipient=String(entered??'').trim();
       if(!recipient)return Promise.resolve(notificationCancelled());
       if(typeof window.confirm!=='function'||!window.confirm(`Please verify the intended recipient for this specific ticket:\n${recipient}\n\nSend a ticket notification to this exact address?`))return Promise.resolve(notificationCancelled());
-      confirmation={owner_email:recipient,recipient_email_confirmed:true};
+      confirmation={recipient_email:recipient,recipient_email_confirmed:true};
     }
     return apiRequest(`/tickets/${id}/notification/retry`, { method: 'POST', body: JSON.stringify(confirmation) });
   },
