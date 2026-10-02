@@ -19,13 +19,36 @@ await db.exec(`insert into public.users(id,name,email,password,role) values
  (9002,'Test Admin','admin@example.test','not-a-login','admin');
  insert into public.vehicles(id,plate_number,vehicle_type,owner_email) values(9001,'LEG123','car','owner@example.test');
  insert into public.tickets(ticket_number,user_id,vehicle_id,violation_id,date_issued,time_issued,penalty_amount_at_issue,plate_ticket_count_at_issue,same_violation_offense_count_at_issue)
- values('LEGACY-STORED',9001,9001,1,current_date,'09:00',1999,1,1),('LEGACY-NULL',9001,9001,2,current_date,'10:00',null,2,1);
+ values('LEGACY-STORED',9001,9001,1,current_date,'09:00',1999,1,1),
+ ('LEGACY-NULL',9001,9001,2,current_date,'10:00',null,2,1),
+ ('LEGACY-OFFICIAL-STORED',9001,9001,2,current_date,'11:00',2345,3,2);
  insert into public.violations(violation_code,violation_name,penalty_amount,demerit_points)
  values('CUSTOM-HITCH','Hitching',777,0),
  ('CUSTOM-INVALID','Invalid driver''s license',777,0),
  ('CUSTOM-DUI','Drunk Driving',777,0);
+ insert into public.violations(violation_code,violation_name,penalty_amount,status)
+ values('LEGACY-INACTIVE','Test inactive legacy violation',1234.56,'inactive');
  insert into public.violation_penalty_rules(violation_id,offense_count,penalty_amount,effective_from) values(1,2,9000,'2000-01-01');`);
-const legacyNullAmount=(await query('select penalty_amount from public.violations where id=2'))[0].penalty_amount;
+const originalCatalog=await query('select id,violation_code,penalty_amount from public.violations order by id');
+const historicalPenalties=await query(`select t.ticket_number,
+ coalesce(t.penalty_amount_at_issue,v.penalty_amount) penalty_amount_at_issue,
+ (t.penalty_amount_at_issue is null) legacy_penalty_recovered,
+ v.violation_code violation_code_at_issue,v.violation_name violation_name_at_issue
+ from public.tickets t join public.violations v on v.id=t.violation_id order by t.id`);
+async function assertHistoricalPenalties() {
+ const rows=await query(`select t.ticket_number,t.penalty_amount_at_issue,t.legacy_penalty_recovered,
+ tv.violation_code_at_issue,tv.violation_name_at_issue,
+ tv.penalty_amount_at_issue item_penalty_amount_at_issue,tv.snapshot_origin
+ from public.tickets t join public.ticket_violations tv on tv.ticket_id=t.id
+ where t.ticket_number like 'LEGACY-%' order by t.id`);
+ assert.equal(rows.length,historicalPenalties.length);
+ for(let i=0;i<rows.length;i++) {
+  const {item_penalty_amount_at_issue,snapshot_origin,...ticket}=rows[i];
+  assert.deepEqual(ticket,historicalPenalties[i]);
+  assert.equal(item_penalty_amount_at_issue,historicalPenalties[i].penalty_amount_at_issue);
+  assert.equal(snapshot_origin,'legacy_catalog');
+ }
+}
 await db.exec(fs.readFileSync('supabase/migrations/'+revised,'utf8'));
 const officialIds=(await query('select id from public.violations where is_citation_selectable and status=$1 order by id',['active'])).map(row=>Number(row.id));
 await db.exec("update public.users set officer_rank='Police Corporal' where id=9001;");
@@ -50,11 +73,21 @@ test('date controls use the Manila calendar across UTC day and year boundaries',
 });
 
 test('legacy stored amounts preserved; missing amounts frozen before catalog update',async()=>{
- const rows=await query('select ticket_number,penalty_amount_at_issue,legacy_penalty_recovered from public.tickets order by id');
- assert.equal(Number(rows[0].penalty_amount_at_issue),1999);assert.equal(rows[0].legacy_penalty_recovered,false);
- assert.equal(Number(rows[1].penalty_amount_at_issue),Number(legacyNullAmount));assert.equal(rows[1].legacy_penalty_recovered,true);
- assert.equal((await query('select * from public.ticket_violations')).length,2);
+ await assertHistoricalPenalties();
+ assert.equal((await query('select * from public.ticket_violations')).length,3);
  assert.equal((await query('select * from public.violation_penalty_rules where penalty_amount=9000')).length,1);
+});
+test('migration and metadata updates preserve every non-selectable legacy penalty',async()=>{
+ const legacy=await query('select id,violation_code,penalty_amount,status from public.violations where not is_citation_selectable order by id');
+ assert.ok(legacy.some(v=>v.status==='active'));
+ assert.ok(legacy.some(v=>v.status==='inactive'));
+ for(const row of legacy) {
+  const original=originalCatalog.find(v=>v.id===row.id);
+  assert.ok(original,`Missing original legacy row ${row.violation_code}`);
+  assert.equal(row.penalty_amount,original.penalty_amount,`Migration changed ${row.violation_code}`);
+  const [edited]=await query("update public.violations set description='Test legacy metadata' where id=$1 returning penalty_amount",[row.id]);
+  assert.equal(edited.penalty_amount,original.penalty_amount,`Metadata update changed ${row.violation_code}`);
+ }
 });
 test('revised citation issuance requires a recorded officer rank',async()=>{
  const before=(await query('select count(*) n from public.tickets'))[0].n;
@@ -75,7 +108,7 @@ test('adviser citation choices reuse seed equivalents and add only missing activ
  assert.equal(rows.length,18);
  assert.deepEqual(rows.map(r=>r.violation_name).sort(),required.sort());
  assert.ok(rows.every(r=>Number(r.penalty_amount)===150));
- assert.equal((await query("select count(*) n from public.violations where status='active' and penalty_amount=150"))[0].n,29);
+ assert.equal((await query("select count(*) n from public.violations where status='active' and is_citation_selectable and penalty_amount=150"))[0].n,18);
  assert.equal((await query("select count(*) n from public.violations where status='active' and not is_citation_selectable"))[0].n,11);
  assert.equal((await query("select count(*) n from public.violations where violation_code='V001' and not is_citation_selectable"))[0].n,1);
  assert.equal((await query("select count(*) n from public.violations where violation_code='V002'"))[0].n,1);
@@ -86,13 +119,27 @@ test('adviser citation choices reuse seed equivalents and add only missing activ
  for(const code of ['TC002','TC008'])
   assert.equal((await query('select is_citation_selectable from public.violations where violation_code=$1',[code]))[0].is_citation_selectable,true);
 });
-test('catalog enforces configured 150 on updates and inserts',async()=>{
- await db.exec("update public.violations set penalty_amount=9000 where id=1;");
- assert.equal((await query('select * from public.violations where penalty_amount<>150')).length,0);
+test('only official selectable catalog rows enforce configured 150 on updates',async()=>{
+ for(const id of officialIds) {
+  const [v]=await query('update public.violations set penalty_amount=9000 where id=$1 returning penalty_amount',[id]);
+  assert.equal(Number(v.penalty_amount),150);
+ }
+ assert.equal((await query('select * from public.violations where is_citation_selectable and penalty_amount<>150')).length,0);
+});
+test('non-selectable catalog inserts and penalty edits retain their supplied amounts',async()=>{
+ const [edited]=await query('update public.violations set penalty_amount=9000 where id=1 returning penalty_amount');
+ assert.equal(Number(edited.penalty_amount),9000);
  const v=(await query("insert into public.violations(violation_code,violation_name,penalty_amount) values('NEWTEST','Test additional violation',9999) returning *"))[0];
- assert.equal(Number(v.penalty_amount),150);
+ assert.equal(Number(v.penalty_amount),9999);
  assert.equal(v.is_citation_selectable,false);
- await query('update public.violations set requires_description=true where id=$1',[v.id]);
+ const [metadataEdit]=await query('update public.violations set requires_description=true where id=$1 returning penalty_amount',[v.id]);
+ assert.equal(Number(metadataEdit.penalty_amount),9999);
+});
+test('historical ticket and item penalties remain unchanged after catalog penalty edits',async()=>{
+ await assertHistoricalPenalties();
+ await assert.rejects(()=>query("update public.tickets set penalty_amount_at_issue=150 where ticket_number='LEGACY-OFFICIAL-STORED'"),/immutable/);
+ await assert.rejects(()=>query("update public.ticket_violations set penalty_amount_at_issue=150 where ticket_id=(select id from public.tickets where ticket_number='LEGACY-STORED')"),/immutable/);
+ await assertHistoricalPenalties();
 });
 test('all 18 official choices reject identity, activation, removal and selection drift',async()=>{
  const before=await query('select * from public.violations where is_citation_selectable order by id');

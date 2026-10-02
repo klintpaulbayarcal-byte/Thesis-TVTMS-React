@@ -5,7 +5,13 @@ function ticket_rpc_result(mixed $result): array
 {
     if (!is_array($result)) return [];
     $error = rpc_domain_error($result);
-    if ($error) fail_domain($error);
+    if ($error) {
+        // Keep the already-migrated database contract; translate its older label here.
+        if (($error['errorCode'] ?? '') === 'OFFICER_RANK_REQUIRED') {
+            $error['message'] = 'Ask the Administrator to record your rank / designation before issuing a citation.';
+        }
+        fail_domain($error);
+    }
     return $result;
 }
 

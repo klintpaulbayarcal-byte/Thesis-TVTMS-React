@@ -62,7 +62,7 @@ export default function IssueTicket() {
       const value = response.context ?? response.data;
       if (!citationContextReady(value)) throw new Error('The configured ₱150 citation penalty or Manila issuance time is unavailable.');
       setContext(value);
-      setContextError(citationOfficerReady(value) ? '' : 'Officer rank is not recorded. Ask the Administrator to update your account before issuing citations.');
+      setContextError(citationOfficerReady(value) ? '' : 'Your rank / designation is not recorded. Ask the Administrator to update your account before issuing citations.');
     }).catch(error => {
       if (!active) return;
       setContext(null);
@@ -166,7 +166,7 @@ export default function IssueTicket() {
       if (!citationContextReady(fresh)) throw new Error('Citation pricing or time is unavailable.');
       setContext(fresh);
       if (!citationOfficerReady(fresh)) {
-        setContextError('Officer rank is not recorded. Ask the Administrator to update your account before issuing citations.');
+        setContextError('Your rank / designation is not recorded. Ask the Administrator to update your account before issuing citations.');
         return;
       }
       setContextError(''); lookupGate.current.invalidate(); setReviewOpen(true);
@@ -219,7 +219,7 @@ export default function IssueTicket() {
     ['Place of Violation', form.location],
     ...(form.violation_latitude == null ? [] : [['Supporting GPS', `${form.violation_latitude}, ${form.violation_longitude}`]]),
     ['Report/appear by', context?.appearance_due_date], ['Apprehending Officer', context?.officer_name],
-    ['Rank', context?.officer_rank || 'Not recorded'], ['Total Citation Penalty', total == null ? 'Unavailable' : money(total)],
+    ['Rank / Designation', context?.officer_rank || 'Not recorded'], ['Total Citation Penalty', total == null ? 'Unavailable' : money(total)],
   ];
 
   return <div className="issue-ticket-restored">
@@ -317,7 +317,7 @@ export default function IssueTicket() {
         </section>
         <section className="citation-section"><h4 className="form-section-title">Apprehending Officer</h4>
           <div className="form-grid"><div className="citation-readonly-time"><span>Officer Name</span><strong>{context?.officer_name ?? 'Unavailable'}</strong></div>
-            <div className="citation-readonly-time"><span>Rank</span><strong>{context?.officer_rank || 'Not recorded'}</strong></div></div>
+            <div className="citation-readonly-time"><span>Rank / Designation</span><strong>{context?.officer_rank || 'Not recorded'}</strong></div></div>
         </section>
         <div className="ticket-form-actions"><button className="btn btn-primary btn-lg" disabled={!ready || busy || gpsBusy}>
           <Icon name="ticket"/>Review Traffic Citation</button>

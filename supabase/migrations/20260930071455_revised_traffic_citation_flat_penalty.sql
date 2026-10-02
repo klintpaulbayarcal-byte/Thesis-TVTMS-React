@@ -71,7 +71,11 @@ end; $$;
 create function private.enforce_citation_catalog_penalty() returns trigger
 language plpgsql security invoker set search_path='' as $$
 begin
- new.penalty_amount:=public.tvtms_citation_penalty();
+ -- Only official checklist rows use the flat penalty. Legacy/Admin-only
+ -- catalog amounts must survive inserts, metadata edits and this migration.
+ if new.is_citation_selectable then
+   new.penalty_amount:=public.tvtms_citation_penalty();
+ end if;
  if lower(trim(new.violation_name)) in ('other','others') or upper(new.violation_code) in ('OTHER','OTHERS') then
    new.requires_description:=true;
  end if;
@@ -79,7 +83,6 @@ begin
 end; $$;
 create trigger violations_flat_penalty before insert or update on public.violations
 for each row execute function private.enforce_citation_catalog_penalty();
-update public.violations set penalty_amount=public.tvtms_citation_penalty();
 -- Old escalation rules remain intact but revised preview/issuance never use them.
 update public.violations set requires_description=true
 where lower(trim(violation_name)) in ('other','others') or upper(violation_code) in ('OTHER','OTHERS');
@@ -140,6 +143,7 @@ begin
      if existing.status<>'active' then
        raise exception 'Citation catalog choice % exists but is inactive; review it before applying this migration',choice.name;
      end if;
+     -- Marking an official choice selectable normalizes its penalty via the trigger.
      update public.violations set violation_name=choice.name,
        is_citation_selectable=true,requires_description=(choice.name='Others')
      where id=existing.id;
@@ -263,7 +267,7 @@ begin
  select * into actor from public.users where id=p_user_id and role='apprehending_officer' and status='active' for share;
  if not found then return public.tvtms_ticket_error('FORBIDDEN','Only an active Apprehending Officer may issue citations.',403); end if;
  if coalesce(length(trim(actor.officer_rank)),0)=0 then
- return public.tvtms_ticket_error('OFFICER_RANK_REQUIRED','Ask the Administrator to record your officer rank before issuing a citation.',409); end if;
+ return public.tvtms_ticket_error('OFFICER_RANK_REQUIRED','Ask the Administrator to record your rank / designation before issuing a citation.',409); end if;
  if num is null or num !~ '^[A-Z0-9][A-Z0-9/-]{0,29}$' or plate is null or plate !~ '^[A-Z0-9]{1,20}$'
  or coalesce(p_data->>'vehicle_type','') not in ('motorcycle','tricycle','car','truck','bus','van')
  or coalesce(length(trim(p_data->>'driver_first_name')),0) not between 1 and 100

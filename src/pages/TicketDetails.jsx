@@ -258,7 +258,7 @@ export default function TicketDetails() {
         ['License classification',ticket.license_type==='Others'?ticket.license_type_other:ticket.license_type],['Vehicle make',ticket.vehicle_make_at_issue],
         ['Registered owner address',ticket.owner_address],['Date of violation',dateOnly(ticket.incident_date)],['Time of violation',ticket.incident_time],
         ['Supporting GPS',ticket.violation_latitude==null?'Not recorded':`${ticket.violation_latitude}, ${ticket.violation_longitude}`],
-        ['Officer rank at issuance',ticket.officer_rank_at_issue],['Report/appear by',dateOnly(ticket.appearance_due_date)]
+        ['Rank / Designation at issuance',ticket.officer_rank_at_issue],['Report/appear by',dateOnly(ticket.appearance_due_date)]
       ].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'Not recorded'}</dd></div>)}</div><p>The seven-day appearance deadline is separate from the payment and dispute deadlines.</p></section>}
       <div className="ticket-financial-strip"><div><span>Total Citation Penalty</span><strong>{money(penalty)}</strong></div><div><span>Total Paid</span><strong className="paid-value">{money(ticket.total_paid)}</strong></div><div><span>Remaining Balance</span><strong className="balance-value">{money(ticket.remaining_balance)}</strong></div></div>
 

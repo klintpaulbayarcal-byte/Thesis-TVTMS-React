@@ -75,3 +75,19 @@ echo json_encode(['ticket'=>$plain['ticket_number'],'ids'=>$plain['violation_ids
     data = json.loads(result.stdout)
     assert data == {'ticket': '7258', 'ids': [1, 2], 'noGps': True,
                     'gps': True, 'invalid': [True, True]}
+
+
+def test_existing_database_rank_error_uses_designation_wording_without_sql_changes():
+    handler = json.dumps(str(ROOT / 'api/src/handlers/tickets.php'))
+    common = json.dumps(str(ROOT / 'api/src/common.php'))
+    script = f'''require {common};
+require {handler};
+ticket_rpc_result(['error'=>['errorCode'=>'OFFICER_RANK_REQUIRED','statusCode'=>409,
+'message'=>'Ask the Administrator to record your officer rank before issuing a citation.']]);'''
+    result = subprocess.run([str(PHP), '-r', script], cwd=ROOT,
+                            stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        'message': 'Ask the Administrator to record your rank / designation before issuing a citation.',
+        'success': False, 'errorCode': 'OFFICER_RANK_REQUIRED',
+    }
