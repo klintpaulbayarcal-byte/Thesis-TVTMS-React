@@ -70,6 +70,12 @@ const qs = (params = {}) => {
   return s.toString();
 };
 
+const notificationCancelled = () => ({notification:{
+  status:'confirmation_cancelled',
+  message:'No email was sent. Recipient confirmation was cancelled.',
+  retryAllowed:true,
+}});
+
 export const API = {
   health: () => apiRequest('/health'),
   login: credentials => apiRequest('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
@@ -99,7 +105,20 @@ export const API = {
 
   tickets: filters => apiRequest(`/tickets${qs(filters) ? `?${qs(filters)}` : ''}`),
   ticket: id => apiRequest(`/tickets/${id}`),
+  citationContext: () => apiRequest('/tickets/issuance-context'),
   createTicket: data => apiRequest('/tickets', { method: 'POST', body: JSON.stringify(data) }),
+  retryTicketNotification: (id, data) => {
+    let confirmation=data;
+    if(!confirmation){
+      if(typeof window==='undefined'||typeof window.prompt!=='function')return Promise.resolve(notificationCancelled());
+      const entered=window.prompt('Enter the recipient email recorded when this citation was issued. For a new citation, use the cited driver email shown in its details:');
+      const recipient=String(entered??'').trim();
+      if(!recipient)return Promise.resolve(notificationCancelled());
+      if(typeof window.confirm!=='function'||!window.confirm(`Please verify the intended recipient for this specific ticket:\n${recipient}\n\nSend a ticket notification to this exact address?`))return Promise.resolve(notificationCancelled());
+      confirmation={recipient_email:recipient,recipient_email_confirmed:true};
+    }
+    return apiRequest(`/tickets/${id}/notification/retry`, { method: 'POST', body: JSON.stringify(confirmation) });
+  },
   updateTicket: (id, data) => apiRequest(`/tickets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   updateTicketDetails: (id, data) => apiRequest(`/tickets/${id}/details`, { method: 'PUT', body: JSON.stringify(data) }),
   cancelTicket: (id, reason) => apiRequest(`/tickets/${id}`, { method: 'DELETE', body: JSON.stringify({ reason }) }),
@@ -147,7 +166,15 @@ export const API = {
   publicVehicleLookup: plateNumber => apiRequest(`/public/vehicle-lookup?${qs({ plateNumber })}`),
   publicPlateSummary: plateNumber => apiRequest(`/public/plate-summary?${qs({ plateNumber })}`),
   publicDispute: data => apiRequest('/public/dispute', { method: 'POST', body: JSON.stringify(data) }),
-  publicContact: data => apiRequest('/public/contact', { method: 'POST', body: JSON.stringify(data) }),
+  publicContact: async data => {
+    const result = await apiRequest('/public/contact', { method: 'POST', body: JSON.stringify(data) });
+    // Saving was successful, so do not automatically retry a failed email and duplicate the message.
+    if (result?.contact_id && result?.email_status &&
+        (result.email_status.administrator !== 'accepted' || result.email_status.confirmation !== 'accepted')) {
+      throw new ApiError(result.message || 'Your message was saved, but email delivery could not be confirmed. Please do not resubmit.', 201, 'CONTACT_SAVED_EMAIL_INCOMPLETE', result);
+    }
+    return result;
+  },
 
   report: (name, filters = {}) => apiRequest(`/reports/${name}${qs(filters) ? `?${qs(filters)}` : ''}`),
   reportPdf: filters => apiBlobRequest(`/reports/export/pdf${qs(filters) ? `?${qs(filters)}` : ''}`),

@@ -5,7 +5,13 @@ function ticket_rpc_result(mixed $result): array
 {
     if (!is_array($result)) return [];
     $error = rpc_domain_error($result);
-    if ($error) fail_domain($error);
+    if ($error) {
+        // Keep the already-migrated database contract; translate its older label here.
+        if (($error['errorCode'] ?? '') === 'OFFICER_RANK_REQUIRED') {
+            $error['message'] = 'Ask the Administrator to record your rank / designation before issuing a citation.';
+        }
+        fail_domain($error);
+    }
     return $result;
 }
 
@@ -27,7 +33,15 @@ function ticket_apply_payment_totals(array $tickets, array $payments): array
         $penaltySource=$ticket['penalty_amount_at_issue']??$ticket['penalty_amount']??0;
         $penalty=round((float)$penaltySource,2);
         $ticket['total_paid']=$paid;
-        $ticket['remaining_balance']=round(max(0,$penalty-$paid),2);
+        $ticket['remaining_balance']=strtolower((string)($ticket['status']??''))==='cancelled'
+            ?0.0
+            :round(max(0,$penalty-$paid),2);
+        $storedStatus=strtolower((string)($ticket['status']??''));
+        $ticket['payment_status']=$storedStatus==='cancelled'
+            ?'cancelled'
+            :($ticket['remaining_balance']<=0
+                ?'paid'
+                :($paid>0?'partially_paid':'unpaid'));
     }
     unset($ticket);
     return $tickets;
@@ -93,27 +107,96 @@ function tickets_get_one(array $params): never
     $ticket['remarks']=$base[0]['remarks']??null;
     $enriched=ticket_enrich_payment_totals([$ticket]);
     $ticket=$enriched[0]??$ticket;
+    $ticket['notification']=ticket_notification_read($ticket);
     ok('Ticket fetched successfully',$ticket,['ticket'=>$ticket]);
+}
+
+function tickets_citation_context(array $params=[]): never
+{
+    $u=require_role(['apprehending_officer']);
+    $context=ticket_rpc_result(supabase_rpc('tvtms_citation_context',['p_actor'=>(int)$u['id']]));
+    ok('Citation context fetched',$context,['context'=>$context]);
+}
+
+function citation_input(array $b): array
+{
+    $limits=['ticket_number'=>30,'plate_number'=>20,'vehicle_type'=>20,'vehicle_make'=>100,
+        'driver_first_name'=>100,'driver_middle_name'=>100,'driver_last_name'=>100,'driver_address'=>2000,
+        'driver_nationality'=>100,'driver_email'=>190,'license_type'=>30,'license_type_other'=>100,
+        'driver_license_number'=>30,'owner_name'=>100,'owner_address'=>2000,'location'=>200,'remarks'=>4000,
+        'expected_date'=>10];
+    $data=[];
+    foreach($limits as $key=>$limit){
+        $value=$b[$key]??'';
+        if(!is_string($value)||text_length(trim($value))>$limit)fail('Invalid citation field: '.$key,400,'VALIDATION_ERROR');
+        $data[$key]=trim($value);
+    }
+    foreach(['ticket_number','plate_number','vehicle_type','vehicle_make','driver_first_name','driver_last_name','driver_address','driver_nationality','driver_email','owner_name','owner_address','location','expected_date'] as $key){
+        if($data[$key]==='')fail('Complete the required citation information.',400,'VALIDATION_ERROR');
+    }
+    $data['ticket_number']=strtoupper($data['ticket_number']);$data['plate_number']=normalize_plate($data['plate_number']);
+    $data['driver_email']=normalize_email($data['driver_email']);
+    if (!in_array($data['vehicle_type'], ['motorcycle','tricycle','car','truck','bus','van'], true)
+        || !in_array($data['license_type'], ['', 'Professional','Non-Professional','Student Permit / SP','Others'], true)
+        || ($data['license_type'] === 'Others' && $data['license_type_other'] === '')) {
+        fail('Select a vehicle type and a valid license classification if applicable. Specify Others when selected.',400,'VALIDATION_ERROR');
+    }
+    if ($data['license_type'] !== 'Others') $data['license_type_other'] = '';
+    if(!filter_var($data['driver_email'],FILTER_VALIDATE_EMAIL)||!preg_match('/^[A-Z0-9][A-Z0-9\/-]{0,29}$/',$data['ticket_number']))fail('Provide a valid citation number and driver email.',400,'VALIDATION_ERROR');
+    $ids=$b['violation_ids']??null;
+    if(!is_array($ids)||!array_is_list($ids)||count($ids)<1||count($ids)>100)fail('Select one or more active violations.',400,'VALIDATION_ERROR');
+    foreach($ids as $id)if(!is_int($id)||$id<=0)fail('Invalid violation selection.',400,'VALIDATION_ERROR');
+    if(count(array_unique($ids))!==count($ids))fail('Duplicate violations are not allowed.',400,'VALIDATION_ERROR');
+    if(isset($b['violation_descriptions'])&&!is_array($b['violation_descriptions']))fail('Invalid violation descriptions.',400,'VALIDATION_ERROR');
+    $data['violation_ids']=$ids;$data['violation_descriptions']=[];
+    foreach(($b['violation_descriptions']??[]) as $key=>$value){
+        if(!is_string($value)||text_length(trim($value))>1000)fail('Violation descriptions must be at most 1000 characters.',400,'VALIDATION_ERROR');
+        if(in_array((int)$key,$ids,true))$data['violation_descriptions'][(string)$key]=trim($value);
+    }
+    $data['violation_descriptions']=(object)$data['violation_descriptions'];
+    $latitude=$b['violation_latitude']??null;$longitude=$b['violation_longitude']??null;
+    if(($latitude===null)!==($longitude===null))fail('GPS coordinates must be supplied together.',400,'VALIDATION_ERROR');
+    if($latitude!==null){
+        if((!is_int($latitude)&&!is_float($latitude))||(!is_int($longitude)&&!is_float($longitude))
+            ||!is_finite((float)$latitude)||!is_finite((float)$longitude)
+            ||$latitude < -90||$latitude > 90||$longitude < -180||$longitude > 180){
+            fail('GPS coordinates are outside the valid range.',400,'VALIDATION_ERROR');
+        }
+    }
+    $data['violation_latitude']=$latitude;$data['violation_longitude']=$longitude;
+    return $data;
 }
 
 function tickets_create(array $params=[]): never
 {
-    $u=require_role(['apprehending_officer']);$b=json_input();
-    $plate=normalize_plate($b['plate_number']??'');$type=strtolower(trim((string)($b['vehicle_type']??'')));
-    $owner=clean_string($b['owner_name']??'',100);$email=normalize_email($b['owner_email']??'');
-    $address=clean_string($b['owner_address']??'',2000);$license=strtoupper(clean_string($b['driver_license_number']??'',30));
-    $location=clean_string($b['location']??'',200);$remarks=clean_string($b['remarks']??'',4000);$vid=(int)($b['violation_id']??0);
-    if(!$plate||strlen($plate)>20||!in_array($type,['motorcycle','tricycle','car','truck','bus','van'],true)||$vid<=0) fail('Valid plate number, vehicle type, and violation are required',400,'VALIDATION_ERROR');
-    if($email!==''&&!filter_var($email,FILTER_VALIDATE_EMAIL))fail('Owner email address is invalid',400,'VALIDATION_ERROR');
-    $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_create',['p_user_id'=>(int)$u['id'],'p_data'=>[
-        'plate_number'=>$plate,'vehicle_type'=>$type,'owner_name'=>$owner,'owner_email'=>$email,
-        'owner_address'=>$address,'driver_license_number'=>$license,'violation_id'=>$vid,'location'=>$location,'remarks'=>$remarks
-    ]]));
-    $ticket=$r['ticket']??null;if(!is_array($ticket))fail('Ticket creation returned no record',500,'TICKET_CREATE_FAILED');
-    $penalty=$r['penaltyInfo']??[];
-    log_audit((int)$u['id'],'TICKET_CREATED','tickets',(int)($ticket['id']??0),['ticketNumber'=>$ticket['ticket_number']??null,'violationId'=>$vid,'plateNumber'=>$plate,'penaltyInfo'=>$penalty]);
-    if($email!=='')send_basic_email($email,'Traffic Violation Notice — '.($ticket['ticket_number']??'TVTMS'),'<p>A traffic violation ticket <strong>'.htmlspecialchars((string)($ticket['ticket_number']??''),ENT_QUOTES,'UTF-8').'</strong> was issued for plate <strong>'.htmlspecialchars($plate,ENT_QUOTES,'UTF-8').'</strong>.</p>');
-    ok('Ticket issued successfully',$ticket,['ticket'=>$ticket],201);
+    $u=require_role(['apprehending_officer']);$data=citation_input(json_input());
+    // The RPC validates current catalog entries and writes all snapshots/history
+    // atomically. Client penalties, officer identity, and issuance time are ignored.
+    $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_create',['p_user_id'=>(int)$u['id'],'p_data'=>$data]));
+    $ticket=$r['ticket']??null;if(!is_array($ticket))fail('Citation creation returned no record',500,'TICKET_CREATE_FAILED');
+    // Only after the committed RPC returns: driver snapshot is checked before SMTP.
+    try{$notification=ticket_notification_attempt((int)$u['id'],$ticket,$data['driver_email']);}
+    catch(Throwable){
+        error_log('Citation notification failed after persistence.');
+        $notification=ticket_notification_result('unknown',null,false,'Citation issued, but email delivery is uncertain. Do not issue a duplicate citation.');
+    }
+    ok('Traffic citation issued successfully',$ticket,['ticket'=>$ticket,'notification'=>$notification],201);
+}
+
+function tickets_retry_notification(array $params): never
+{
+    $u=require_role(['admin','apprehending_officer']);
+    $id=ticket_valid_id($params['id']??0);$b=json_input();
+    $confirmed=(($b['recipient_email_confirmed']??null)===true&&is_string($b['recipient_email']??$b['owner_email']??null))?normalize_email($b['recipient_email']??$b['owner_email']):'';
+    if($confirmed===''||filter_var($confirmed,FILTER_VALIDATE_EMAIL)===false){
+        fail('Confirm the intended email address before retrying this ticket notification.',409,'NOTIFICATION_RECIPIENT_REQUIRED');
+    }
+    $notification=ticket_notification_attempt((int)$u['id'],['id'=>$id],$confirmed);
+    $statusCode=(int)($notification['statusCode']??0);
+    if($statusCode>=400){
+        fail((string)($notification['message']??'Notification retry was rejected.'),$statusCode,(string)($notification['errorCode']??'NOTIFICATION_RETRY_REJECTED'));
+    }
+    ok('Notification retry completed',$notification,['notification'=>$notification]);
 }
 
 function tickets_update_status(array $params): never
@@ -163,9 +246,11 @@ function tickets_mark_unpaid(array $params): never
 {
     $u=require_role(['admin']);$id=ticket_valid_id($params['id']??0);$reason=clean_string(json_input()['reason']??'',500);
     if(strlen($reason)<5)fail('A correction reason between 5 and 500 characters is required',400,'VALIDATION_ERROR');
-    $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_mutate',['p_action'=>'unpaid','p_id'=>$id,'p_user_id'=>(int)$u['id'],'p_role'=>$u['role'],'p_data'=>['reason'=>$reason]]));$ticket=$r['ticket']??[];
-    log_audit((int)$u['id'],'TICKET_MARKED_UNPAID','tickets',$id,['ticketNumber'=>$ticket['ticket_number']??null,'voidedPayments'=>(int)($r['voidedPayments']??0),'reason'=>$reason]);
-    ok('Ticket marked unpaid successfully',['id'=>$id,'ticketNumber'=>$ticket['ticket_number']??null,'status'=>'unpaid','voidedPayments'=>(int)($r['voidedPayments']??0)]);
+    $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_mark_unpaid',['p_id'=>$id,'p_user_id'=>(int)$u['id'],'p_role'=>$u['role'],'p_reason'=>$reason]));$ticket=$r['ticket']??[];
+    $voidedIds=array_values(array_map('intval',is_array($r['voidedPaymentIds']??null)?$r['voidedPaymentIds']:[]));
+    $voidedCount=(int)($r['voidedPayments']??count($voidedIds));$voidedAmount=(float)($r['voidedPaymentAmount']??0);
+    log_audit((int)$u['id'],'TICKET_MARKED_UNPAID','tickets',$id,['ticketNumber'=>$ticket['ticket_number']??null,'voidedPayments'=>$voidedCount,'voidedPaymentIds'=>$voidedIds,'voidedPaymentAmount'=>$voidedAmount,'reason'=>$reason]);
+    ok('Ticket marked unpaid successfully',['id'=>$id,'ticketNumber'=>$ticket['ticket_number']??null,'status'=>'unpaid','voidedPayments'=>$voidedCount,'voidedPaymentIds'=>$voidedIds,'voidedPaymentAmount'=>$voidedAmount]);
 }
 
 function tickets_stats(array $params=[]): never

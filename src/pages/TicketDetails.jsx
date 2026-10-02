@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import QRCode from 'qrcode';
+import CitationViolations from '../components/CitationViolations';
 import { API } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import PageHeader from '../components/PageHeader';
@@ -8,9 +9,9 @@ import StatusBadge from '../components/StatusBadge';
 import DataTable from '../components/DataTable';
 import Notice from '../components/Notice';
 import Modal from '../components/Modal';
-import { dateOnly, dateTime, firstArray, money } from '../utils/format';
+import { dateOnly, dateTime, firstArray, money, manilaDateKey } from '../utils/format';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = manilaDateKey;
 
 export default function TicketDetails() {
   const { id } = useParams();
@@ -27,6 +28,7 @@ export default function TicketDetails() {
   const [actionType, setActionType] = useState('');
   const [actionReason, setActionReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const [notificationBusy, setNotificationBusy] = useState(false);
   const qrCanvas = useRef(null);
   const [payment, setPayment] = useState({
     amount_paid: '',
@@ -169,6 +171,23 @@ export default function TicketDetails() {
     }
   };
 
+  const retryNotification = async () => {
+    setNotificationBusy(true);
+    try {
+      const response = await API.retryTicketNotification(id);
+      const outcome = response.notification ?? response.data ?? {};
+      await load();
+      setNotice({
+        type: outcome.status === 'accepted' || outcome.status === 'already_accepted' ? 'success' : 'info',
+        text: outcome.message || 'No email notification status was returned.',
+      });
+    } catch (error) {
+      setNotice({ type: 'error', text: error.message });
+    } finally {
+      setNotificationBusy(false);
+    }
+  };
+
   const downloadEvidence = async row => {
     try {
       const blob = await API.evidenceFile(row.id);
@@ -195,12 +214,13 @@ export default function TicketDetails() {
     popup.print();
   };
 
-  if (loading && !ticket) return <><PageHeader title="Ticket Details"/><div className="card">Loading ticket…</div></>;
-  if (!ticket) return <><PageHeader title="Ticket Details"/><Notice type="error">{notice.text || 'Ticket could not be loaded.'}</Notice></>;
+  if (loading && !ticket) return <><PageHeader title="Citation Details"/><div className="card">Loading ticket…</div></>;
+  if (!ticket) return <><PageHeader title="Citation Details"/><Notice type="error">{notice.text || 'Ticket could not be loaded.'}</Notice></>;
 
   const penalty = ticket.penalty_amount_at_issue ?? ticket.penalty_amount;
   const canEdit = ticket.status !== 'cancelled';
   const canRecordPayment = isAdmin && ticket.status !== 'cancelled' && Number(ticket.remaining_balance ?? penalty ?? 0) > 0;
+  const notification = ticket.notification ?? {};
 
   const timelineColumns = [
     { key: 'created_at', label: 'Date', render: row => dateTime(row.created_at) },
@@ -212,28 +232,45 @@ export default function TicketDetails() {
 
   return <div className="restored-ticket-details-page">
     <PageHeader
-      title="Ticket Details"
+      title="Citation Details"
       subtitle={`Complete citation record for ${ticket.ticket_number}.`}
       actions={<div className="header-actions"><button className="btn btn-primary btn-sm no-print" onClick={()=>window.print()}>Print Ticket</button><button className="btn btn-secondary btn-sm no-print" onClick={()=>navigate(isAdmin?'/admin/tickets':'/officer/tickets')}>← Back to Tickets</button>{canEdit&&<button className="btn btn-secondary btn-sm no-print" onClick={()=>setEditOpen(true)}>Edit Details</button>}{isAdmin&&ticket.status!=='cancelled'&&<button className="btn btn-danger btn-sm no-print" onClick={()=>startAction('cancel')}>Cancel Ticket</button>}</div>}
     />
     <Notice type={notice.type} onClose={()=>setNotice({type:'',text:''})}>{notice.text}</Notice>
 
     <section className="card ticket-detail-card">
-      <div className="ticket-document-head"><div><span className="ticket-document-kicker">MUNICIPALITY OF CALAPE · BOHOL</span><h2>VEHICLE VIOLATION TICKET</h2><p>Traffic Violation Ticketing &amp; Management System</p></div><div className="ticket-number-panel"><small>Ticket Number</small><strong>{ticket.ticket_number}</strong><StatusBadge value={ticket.status}/></div></div>
+      <div className="ticket-document-head"><div><span className="ticket-document-kicker">MUNICIPALITY OF CALAPE · BOHOL</span><h2>TRAFFIC CITATION</h2><p>Traffic Violation Ticketing &amp; Management System</p></div><div className="ticket-number-panel"><small>Citation Number</small><strong>{ticket.ticket_number}</strong><StatusBadge value={ticket.status}/></div></div>
 
       <div className="ticket-detail-sections">
         <section className="ticket-info-section"><div className="ticket-section-title"><span>01</span><h3>Date & Time Information</h3></div><div className="details-grid"><div><dt>Date issued</dt><dd>{dateOnly(ticket.date_issued)}</dd></div><div><dt>Time issued</dt><dd>{ticket.time_issued || '—'}</dd></div><div className="span-2"><dt>Location</dt><dd>{ticket.location || '—'}</dd></div></div></section>
 
-        <section className="ticket-info-section"><div className="ticket-section-title"><span>02</span><h3>Vehicle Information</h3></div><div className="details-grid"><div><dt>Plate number</dt><dd className="plate-value">{ticket.plate_number}</dd></div><div><dt>Vehicle type</dt><dd>{ticket.vehicle_type || '—'}</dd></div><div><dt>Driver / owner</dt><dd>{ticket.owner_name || '—'}</dd></div><div><dt>License number</dt><dd>{ticket.driver_license_number || '—'}</dd></div></div></section>
+        <section className="ticket-info-section"><div className="ticket-section-title"><span>02</span><h3>Vehicle Information</h3></div><div className="details-grid"><div><dt>Plate number</dt><dd className="plate-value">{ticket.plate_number}</dd></div><div><dt>Vehicle type</dt><dd>{ticket.vehicle_type || '—'}</dd></div><div><dt>Registered owner</dt><dd>{ticket.owner_name || '—'}</dd></div><div><dt>License number</dt><dd>{ticket.driver_license_number || '—'}</dd></div></div></section>
 
-        <section className="ticket-info-section"><div className="ticket-section-title"><span>03</span><h3>Violation Information</h3></div><div className="details-grid"><div className="span-2"><dt>Violation</dt><dd>{ticket.violation_code} · {ticket.violation_name}</dd></div><div className="span-2"><dt>Remarks</dt><dd>{ticket.remarks || '—'}</dd></div></div></section>
+        <section className="ticket-info-section"><div className="ticket-section-title"><span>03</span><h3>Violation Information</h3></div><div className="details-grid"><div className="span-2"><dt>{ticket.citation_version===2?'Selected violations':'Violation'}</dt><dd>{ticket.citation_version===2?`${ticket.violations?.length??0} issued violations`:`${ticket.violation_code} · ${ticket.violation_name}`}</dd></div><div><dt>Plate Ticket Count at Issuance</dt><dd>{ticket.plate_ticket_count_at_issue??'—'}</dd></div>{ticket.citation_version!==2&&<div><dt>Legacy same-violation occurrence</dt><dd>{ticket.same_violation_offense_count_at_issue??'—'}</dd></div>}<div className="span-2"><dt>Remarks</dt><dd>{ticket.remarks || '—'}</dd></div></div></section>
 
         <section className="ticket-info-section"><div className="ticket-section-title"><span>04</span><h3>Issued By</h3></div><div className="details-grid"><div><dt>Apprehending Officer</dt><dd>{ticket.officer_name || '—'}</dd></div><div><dt>Current Status</dt><dd><StatusBadge value={ticket.status}/></dd></div></div></section>
       </div>
 
-      <div className="ticket-financial-strip"><div><span>Penalty Amount</span><strong>{money(penalty)}</strong></div><div><span>Total Paid</span><strong className="paid-value">{money(ticket.total_paid)}</strong></div><div><span>Remaining Balance</span><strong className="balance-value">{money(ticket.remaining_balance)}</strong></div></div>
+      <section className="ticket-info-section"><h3>Issued Violations</h3><CitationViolations ticket={ticket}/><p>Same-plate counts are historical monitoring information, not proof of the same driver. Revised citations use the flat penalty.</p>{ticket.legacy_penalty_recovered&&<p>Legacy penalty preserved from the catalog value available at migration; an original issue-time amount was not recorded.</p>}</section>
+      {ticket.citation_version===2&&<section className="ticket-info-section"><h3>Driver, Violation & Appearance Details</h3><div className="details-grid">{[
+        ['Cited driver',[ticket.driver_first_name,ticket.driver_middle_name,ticket.driver_last_name].filter(Boolean).join(' ')],
+        ['Driver email',ticket.driver_email_at_issue],['Driver address',ticket.driver_address],['Nationality',ticket.driver_nationality],
+        ['License classification',ticket.license_type==='Others'?ticket.license_type_other:ticket.license_type],['Vehicle make',ticket.vehicle_make_at_issue],
+        ['Registered owner address',ticket.owner_address],['Date of violation',dateOnly(ticket.incident_date)],['Time of violation',ticket.incident_time],
+        ['Supporting GPS',ticket.violation_latitude==null?'Not recorded':`${ticket.violation_latitude}, ${ticket.violation_longitude}`],
+        ['Rank / Designation at issuance',ticket.officer_rank_at_issue],['Report/appear by',dateOnly(ticket.appearance_due_date)]
+      ].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'Not recorded'}</dd></div>)}</div><p>The seven-day appearance deadline is separate from the payment and dispute deadlines.</p></section>}
+      <div className="ticket-financial-strip"><div><span>Total Citation Penalty</span><strong>{money(penalty)}</strong></div><div><span>Total Paid</span><strong className="paid-value">{money(ticket.total_paid)}</strong></div><div><span>Remaining Balance</span><strong className="balance-value">{money(ticket.remaining_balance)}</strong></div></div>
 
       {isAdmin&&<div className="ticket-admin-actions">{ticket.status==='paid'&&<button className="btn btn-secondary" onClick={()=>startAction('unpaid')}>Mark Unpaid</button>}<button className="btn btn-ghost danger-link" onClick={()=>startAction('delete')}>Permanent Delete</button></div>}
+    </section>
+
+    <section className="card no-print">
+      <div className="card-header">
+        <div><span className="section-kicker">EMAIL NOTICE</span><h3 className="card-title">Ticket Notification</h3><p>{notification.message || 'No email notification status is available.'}</p></div>
+        {notification.retryAllowed&&<button className="btn btn-secondary btn-sm" disabled={notificationBusy} onClick={retryNotification}>{notificationBusy?'Retrying…':'Retry Email'}</button>}
+      </div>
+      <div className="card-body details-grid"><div><dt>Delivery status</dt><dd><StatusBadge value={notification.status || 'not recorded'}/></dd></div><div><dt>Recipient</dt><dd>{notification.recipientMasked || 'Not available'}</dd></div></div>
     </section>
 
     <section className="card ticket-qr-card no-print">
@@ -278,7 +315,7 @@ export default function TicketDetails() {
       </div>
     </Modal>
 
-    <Modal open={editOpen} title="Edit Ticket Details" onClose={()=>setEditOpen(false)} footer={<><button className="btn btn-secondary" onClick={()=>setEditOpen(false)}>Cancel</button><button className="btn btn-primary" disabled={busy} onClick={saveDetails}>{busy?'Saving…':'Save Changes'}</button></>}>
+    <Modal open={editOpen} title="Edit Citation Details" onClose={()=>setEditOpen(false)} footer={<><button className="btn btn-secondary" onClick={()=>setEditOpen(false)}>Cancel</button><button className="btn btn-primary" disabled={busy} onClick={saveDetails}>{busy?'Saving…':'Save Changes'}</button></>}>
       <div className="form-grid">
         <label className="field span-2"><span>Location</span><input maxLength="200" value={edit.location} onChange={e=>setEdit({...edit,location:e.target.value})}/></label>
         <label className="field span-2"><span>Remarks</span><textarea rows="5" maxLength="4000" value={edit.remarks} onChange={e=>setEdit({...edit,remarks:e.target.value})}/></label>

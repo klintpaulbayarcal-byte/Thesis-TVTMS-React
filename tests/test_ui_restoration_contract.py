@@ -28,7 +28,7 @@ def test_sidebar_restores_grouped_admin_and_officer_navigation():
 
 def test_admin_dashboard_restores_operations_and_premium_sections():
     page = text('src/pages/AdminDashboard.jsx')
-    for marker in ['Recorded Citations by Area', 'Operations View', 'admin-welcome-banner', 'Executive Summary', 'Action Required', 'bento-grid', 'Top Hotspot Violations']:
+    for marker in ['Recorded Citations by Location', 'Operations View', 'admin-welcome-banner', 'Executive Summary', 'Action Required', 'bento-grid', 'Top Hotspot Violations']:
         assert marker in page, f'Admin dashboard should restore finalized marker: {marker}'
 
 
@@ -51,7 +51,7 @@ def test_login_restores_finalized_split_panel_design():
     page = text('src/pages/Login.jsx')
     main = text('src/main.jsx')
     for marker in ['login-modern', 'login-shell', 'login-visual-panel', 'Secure System Access', 'login-form-panel', 'System Online', 'route-preview', 'visual-meta']:
-        assert marker in page, f'Login should restore finalized marker: {marker}'
+        assert marker in page, f'Login should restore finalized auth marker: {marker}'
     assert 'restored-login.css' in main
 
 
@@ -73,13 +73,14 @@ def test_password_reset_reuses_finalized_login_visual_language():
 
 def test_issue_ticket_restores_finalized_form_structure():
     page = text('src/pages/IssueTicket.jsx')
-    for marker in ['New Violation Ticket', 'Vehicle Information', 'Violation Information', 'REPEAT OFFENDER DETECTED', 'ticket-form-actions', 'Instructions']:
+    for marker in ['New Traffic Citation', 'Vehicle / Registered Owner', 'Traffic Violations', 'Selected Violations', 'Plate Ticket Count at Issuance', 'monitoring only', 'Violation Details', 'Appearance Requirement', 'Apprehending Officer', 'ticket-form-actions']:
         assert marker in page, f'Issue Ticket should restore finalized marker: {marker}'
+    assert 'Incident Information' not in page
 
 
 def test_violator_lookup_restores_finalized_search_and_summary_sections():
     page = text('src/pages/LicensePlateLookup.jsx')
-    for marker in ['lookup-container', 'lookup-section', 'section-title', 'validation-info', 'search-tabs', 'Vehicle Information', 'Violation Summary', 'summary-cards', 'Violation Tickets']:
+    for marker in ['lookup-container', 'lookup-section', 'section-title', 'validation-info', 'search-tabs', 'Vehicle Information', 'Plate Ticket Summary', 'summary-cards', 'Violation Tickets']:
         assert marker in page, f'Violator lookup should restore finalized marker: {marker}'
 
 
@@ -123,5 +124,5 @@ def test_remaining_core_pages_restore_finalized_cards_and_workflow_labels():
         assert marker in reports
     for marker in ['analytics-hero', 'Analytics & KPI Dashboard']:
         assert marker in analytics
-    for marker in ['ticket-detail-card', 'VEHICLE VIOLATION TICKET', 'Date & Time Information', 'Vehicle Information', 'Violation Information', 'Issued By', 'Penalty Amount', 'Ticket Timeline', 'Payment History', 'Evidence']:
+    for marker in ['ticket-detail-card', 'TRAFFIC CITATION', 'Date & Time Information', 'Vehicle Information', 'Violation Information', 'Issued By', 'Total Citation Penalty', 'Ticket Timeline', 'Payment History', 'Evidence']:
         assert marker in details

@@ -1,7 +1,10 @@
 name: Verify React and PHP Hostinger package
 
-# Validation only. This workflow never connects to FTP or modifies Hostinger.
+# Validation/package ONLY: no FTP action, database migration, or live deployment.
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
@@ -13,6 +16,7 @@ permissions:
 jobs:
   verify-package:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -23,33 +27,73 @@ jobs:
           node-version: '24'
           cache: npm
 
-      - name: Install locked dependencies
-        run: npm ci
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-      - name: Verify React JSX and imports
+      - name: Install locked dependencies and Python test runner
+        run: |
+          npm ci
+          python -m pip install pytest
+          echo "TVTMS_PYTHON=$(python -c 'import sys; print(sys.executable)')" >> "$GITHUB_ENV"
+
+      - name: Verify JSX and imports
         run: npm run verify:jsx
 
-      - name: Check PHP syntax
+      - name: Verify PHP runtime and syntax
+        shell: bash
         run: |
+          set -euo pipefail
           command -v php
-          find api -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -r 'exit(PHP_VERSION_ID >= 80100 ? 0 : 1);'
+          find api -type f -name '*.php' -print0 | xargs -0 -r -n1 php -l
+          echo "TVTMS_PHP=$(command -v php)" >> "$GITHUB_ENV"
 
       - name: Build frontend and assemble PHP deployment package
         run: npm run build:hostinger
 
-      - name: Verify package contents and private-file exclusions
+      - name: Verify package and private-file exclusions
+        shell: bash
         run: |
+          set -euo pipefail
           test -f deploy/index.html
           test -f deploy/api/index.php
           test -f deploy/.htaccess
           test -f deploy/api/.htaccess
-          test -f deploy/uploads/.htaccess
+          test -f deploy/api/config/.htaccess
+          test ! -e deploy/uploads
           test ! -e deploy/api/config/config.local.php
           test ! -e deploy/.env
           test ! -e deploy/.env.local
-          echo 'Package structure and private-file exclusions checked.'
+          echo 'Validated build package: uploads remain server-owned runtime data.'
 
-# The Python regression suite currently hard-codes a Windows PHP executable
-# path, so it is not presented as passing in this Linux-only workflow.
-# Do not add FTP deployment until the server directory, backup/rollback,
-# private server configuration, and old-repository workflow are reviewed.
+      - name: Run PHP contract and regression tests
+        run: npm test
+
+      - name: Package verified deployment files
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd deploy && zip -q -r ../TVTMS-Hostinger-React-v4.zip .)
+          unzip -p TVTMS-Hostinger-React-v4.zip index.html > /dev/null
+          unzip -p TVTMS-Hostinger-React-v4.zip api/index.php > /dev/null
+          unzip -p TVTMS-Hostinger-React-v4.zip .htaccess > /dev/null
+          if unzip -Z1 TVTMS-Hostinger-React-v4.zip | grep -Eq '(^|/)(config\.local\.php|\.env|\.env\.local)$|(^|/)uploads/'; then
+            echo 'Refusing artifact: private config or runtime uploads included.' >&2
+            exit 1
+          fi
+          sha256sum TVTMS-Hostinger-React-v4.zip
+
+      - name: Publish deployable archive for controlled Hostinger upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: TVTMS-Hostinger-React-v4
+          path: TVTMS-Hostinger-React-v4.zip
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+# Production FTPS and Supabase migration are NOT configured by this workflow.
+# Confirm correct Hostinger root, PHP support and private server configuration
+# before the separate live upload. Never delete server-owned runtime uploads.

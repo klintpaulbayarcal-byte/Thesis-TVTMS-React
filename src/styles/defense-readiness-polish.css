@@ -1,0 +1,19 @@
+/* Reproduced in the September 21 Administrator notification recording: the
+   timestamp and View Message action touch with no separation. Keep scoped. */
+.restored-notifications-page .notification-content > small {
+  display:block;
+  margin-top:10px;
+  line-height:1.5;
+}
+.restored-notifications-page .notification-content > .notification-view-message {
+  display:inline-flex;
+  align-items:center;
+  margin-top:8px;
+  min-height:28px;
+  max-width:100%;
+  overflow-wrap:anywhere;
+}
+@media (max-width:600px) {
+  .restored-notifications-page .notification-content { min-width:0; }
+  .restored-notifications-page .notification-card { gap:10px; }
+}
