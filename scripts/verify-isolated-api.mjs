@@ -92,6 +92,11 @@ check('Public citation/plate lookup and privacy',()=>{});
 await call('/public/dispute',null,'POST',{ticket_number:three.ticket_number,plate_number:plate3,reason:'Isolated test dispute reason only'},201);
 await call('/public/dispute',null,'POST',{ticket_number:three.ticket_number,plate_number:plate3,reason:'Duplicate isolated test dispute reason'},409);
 const payment={ticket_id:ticket.id,official_receipt_number:`QA-OR-${stamp}-1`,amount_paid:100,payment_date:context.date_issued,payment_method:'cash'};
+for(const payment_date of ['not-a-date','2026-02-30','',null,123,true,[],{}]) {
+ assert.equal((await call('/payments',admin,'POST',{...payment,payment_date},400)).errorCode,'INVALID_PAYMENT_DATE');
+}
+assert.equal((await call(`/payments/ticket/${ticket.id}`,admin)).payments.length,0);
+check('Invalid supplied payment dates rejected without a payment record',()=>{});
 await call('/payments',admin,'POST',payment,201);
 let detail=(await call(`/tickets/${ticket.id}`,admin)).ticket;
 assert.equal(Number(detail.total_paid),100);assert.equal(Number(detail.remaining_balance),200);

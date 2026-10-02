@@ -2,6 +2,8 @@
 
 Run `npm run dev:isolated` (PowerShell: `npm.cmd run dev:isolated`). This starts the existing React/Vite UI on loopback port 5173, PHP on 8000, and the reused PGlite REST adapter on 54321. All three ports must be free. `TVTMS_PHP` may select an existing PHP 8.1+ executable; Windows defaults to the existing PHP 8.3 installation.
 
+The isolated launcher rejects an unsafe inherited `VITE_PHP_API_ORIGIN` before starting any service. An unset/empty value or `http://127.0.0.1:8000` / `http://localhost:8000` (optional trailing slash) is allowed and canonicalized to `http://127.0.0.1:8000` in the child processes. Other hosts, ports, schemes, paths, userinfo, queries and fragments are rejected without echoing the supplied value. Vite rechecks this restriction in isolated mode and binds to `127.0.0.1:5173` with a strict port; both API and uploads proxies use the fixed isolated PHP origin. Ordinary development configuration is unchanged.
+
 Each start creates a fresh migrated database under ignored `.test-tmp/isolated-dev-*` and inserts two **TEST-ONLY local QA fixtures**:
 
 | Display name | Local email | Existing application role value |

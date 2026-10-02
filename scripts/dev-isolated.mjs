@@ -3,13 +3,16 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isolatedQaEnvironment } from './isolated-qa-safety.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// Reject an unsafe override before creating runtime state or starting children.
+const isolatedEnv = isolatedQaEnvironment(process.env);
 const php = [process.env.TVTMS_PHP, process.env.TVTMS_PHP_EXE,
   'C:/tools/php83/php.exe', 'C:/xampp/php/php.exe'].filter(Boolean).find(p => fs.existsSync(p)) || 'php';
 const tempRoot=path.join(root,'.test-tmp');
 fs.mkdirSync(tempRoot,{recursive:true});
 const runtime=fs.mkdtempSync(path.join(tempRoot,'isolated-runtime-'));
-const env = {...process.env, TVTMS_PHP:php, TVTMS_ISOLATED_DEV:'1',
+const env = {...isolatedEnv, TVTMS_PHP:php,
   TEMP:runtime,TMP:runtime,TMPDIR:runtime};
 const children = [];
 let stopping = false;
