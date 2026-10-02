@@ -9,13 +9,15 @@ function development_configuration_error(array $config, string $sapi = PHP_SAPI)
     $key = (string)($config['supabase_secret_key'] ?? '');
     $parts = explode('.', $key);
     $claims = count($parts) === 3 ? json_decode((string)base64_decode(strtr($parts[1], '-_', '+/')), true) : [];
-    if (($config['development'] ?? false) !== true
+    $configured = ($config['configured_development'] ?? false) === true
+        && ($config['isolated_development'] ?? false) === false;
+    if (!$configured && (($config['development'] ?? false) !== true
         || in_array(strtolower((string)($config['environment'] ?? '')), ['production','prod'], true)
         || str_contains($url, 'cwrhxvrmnfmzuxotsjrw')
         || str_contains($publicUrl, 'trafficviolation.dcsbisu.com')
-        || ($claims['ref'] ?? null) === 'cwrhxvrmnfmzuxotsjrw') {
+        || ($claims['ref'] ?? null) === 'cwrhxvrmnfmzuxotsjrw')) {
         return 'Local development is blocked from production. Run npm run dev:isolated, or explicitly configure a non-production database with development enabled.';
     }
-    if ($url === '') return 'Local database configuration is missing. Run npm run dev:isolated.';
+    if ($url === '') return 'Local database configuration is missing. Configure the existing database for npm run dev, or use optional npm run dev:isolated.';
     return null;
 }

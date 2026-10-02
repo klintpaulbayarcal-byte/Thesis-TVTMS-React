@@ -45,7 +45,13 @@ if ($isolated) {
         'app_public_url' => 'http://localhost:5173',
         'development' => true,
         'isolated_development' => true,
+        'configured_development' => false,
         'smtp' => ['enabled'=>false,'host'=>'','username'=>'','password'=>'','from_email'=>''],
     ]);
 }
-return array_replace_recursive($base, $local);
+return array_replace_recursive($base, $local, [
+    // Only the explicit normal npm dev launcher enables configured database access.
+    // Never edit or replace private credentials, accounts or the stored dev flag.
+    'configured_development' => PHP_SAPI === 'cli-server' && getenv('TVTMS_CONFIGURED_DEV') === '1',
+    'isolated_development' => false,
+]);
