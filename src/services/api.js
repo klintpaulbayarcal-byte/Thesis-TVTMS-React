@@ -26,6 +26,42 @@ export class ApiError extends Error {
   }
 }
 
+export const API_READ_TIMEOUT_MS = 45000;
+
+async function withReadDeadline(options, request) {
+  const { timeoutMs = API_READ_TIMEOUT_MS, ...fetchOptions } = options;
+  // Preserve existing write behavior. A cancelled write may still commit;
+  // reads can be retried explicitly without replaying a mutation.
+  if (!['GET', 'HEAD'].includes(String(fetchOptions.method || 'GET').toUpperCase())) return request(fetchOptions);
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new TypeError('A positive read timeout is required.');
+  const callerSignal = fetchOptions.signal;
+  if (callerSignal?.aborted) throw callerSignal.reason || new DOMException('Request cancelled.', 'AbortError');
+  const controller = new AbortController();
+  let rejectDeadline;
+  const deadline = new Promise((_, reject) => { rejectDeadline = reject; });
+  const cancel = () => {
+    const reason = callerSignal.reason || new DOMException('Request cancelled.', 'AbortError');
+    controller.abort(reason); rejectDeadline(reason);
+  };
+  callerSignal?.addEventListener('abort', cancel, { once: true });
+  const timer = setTimeout(() => {
+    const error = new ApiError('The TVTMS request timed out. Please retry.', 0, 'REQUEST_TIMEOUT');
+    controller.abort(error); rejectDeadline(error);
+  }, timeoutMs);
+  try {
+    // Bound both the transport and response-body read, including transports
+    // that fail to settle on abort. The rejected sibling remains observed.
+    const work = Promise.resolve().then(() => {
+      if (controller.signal.aborted) throw controller.signal.reason;
+      return request({ ...fetchOptions, signal: controller.signal });
+    });
+    return await Promise.race([work, deadline]);
+  } finally {
+    clearTimeout(timer);
+    callerSignal?.removeEventListener('abort', cancel);
+  }
+}
+
 export async function apiRequest(endpoint, options = {}) {
   const token = getStoredToken();
   const headers = new Headers(options.headers || {});
@@ -33,26 +69,33 @@ export async function apiRequest(endpoint, options = {}) {
   const isForm = typeof FormData !== 'undefined' && options.body instanceof FormData;
   if (!isForm && options.body != null && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
 
-  let response;
-  try {
-    response = await fetch(`${API_BASE}${endpoint}`, { cache: 'no-store', ...options, headers });
-  } catch {
-    throw new ApiError('Unable to connect to the TVTMS service. Check your connection and try again.', 0, 'NETWORK_ERROR');
-  }
+  return withReadDeadline(options, async requestOptions => {
+    let response;
+    try {
+      response = await fetch(`${API_BASE}${endpoint}`, { cache: 'no-store', ...requestOptions, headers });
+    } catch {
+      if (requestOptions.signal?.aborted) throw requestOptions.signal.reason;
+      throw new ApiError('Unable to connect to the TVTMS service. Check your connection and try again.', 0, 'NETWORK_ERROR');
+    }
 
   const contentType = response.headers.get('content-type') || '';
-  const payload = contentType.includes('application/json') ? await response.json().catch(() => ({})) : null;
+  const payload = contentType.includes('application/json') ? await response.json().catch(() => {
+    if (requestOptions.signal?.aborted) throw requestOptions.signal.reason;
+    return {};
+  }) : null;
   if (!response.ok) {
     if (response.status === 401) clearSession();
     throw new ApiError(payload?.message || `Request failed (${response.status})`, response.status, payload?.errorCode || 'API_ERROR', payload);
   }
   return payload ?? response;
+  });
 }
 
-export async function apiBlobRequest(endpoint) {
+export async function apiBlobRequest(endpoint, options = {}) {
   const token = getStoredToken();
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    cache: 'no-store',
+  return withReadDeadline(options, async requestOptions => {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+    cache: 'no-store', ...requestOptions,
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!response.ok) {
@@ -60,6 +103,7 @@ export async function apiBlobRequest(endpoint) {
     throw new ApiError(payload?.message || 'Unable to download file.', response.status, payload?.errorCode);
   }
   return response.blob();
+  });
 }
 
 const qs = (params = {}) => {
@@ -103,7 +147,7 @@ export const API = {
   deleteViolation: id => apiRequest(`/violations/${id}`, { method: 'DELETE' }),
   penaltyPreview: (id, plateNumber) => apiRequest(`/violations/${id}/penalty-preview?${qs({ plateNumber })}`),
 
-  tickets: filters => apiRequest(`/tickets${qs(filters) ? `?${qs(filters)}` : ''}`),
+  tickets: (filters, options) => apiRequest(`/tickets${qs(filters) ? `?${qs(filters)}` : ''}`, options),
   ticket: id => apiRequest(`/tickets/${id}`),
   citationContext: () => apiRequest('/tickets/issuance-context'),
   createTicket: data => apiRequest('/tickets', { method: 'POST', body: JSON.stringify(data) }),
@@ -124,7 +168,7 @@ export const API = {
   cancelTicket: (id, reason) => apiRequest(`/tickets/${id}`, { method: 'DELETE', body: JSON.stringify({ reason }) }),
   permanentDeleteTicket: (id, reason) => apiRequest(`/tickets/${id}/permanent`, { method: 'DELETE', body: JSON.stringify({ reason }) }),
   markUnpaid: (id, reason) => apiRequest(`/tickets/${id}/mark-unpaid`, { method: 'PUT', body: JSON.stringify({ reason }) }),
-  ticketStats: filters => apiRequest(`/tickets/stats${qs(filters) ? `?${qs(filters)}` : ''}`),
+  ticketStats: (filters, options) => apiRequest(`/tickets/stats${qs(filters) ? `?${qs(filters)}` : ''}`, options),
   searchTickets: search => apiRequest(`/tickets/search?${qs({ search })}`),
 
   paymentsForTicket: id => apiRequest(`/payments/ticket/${id}`),
