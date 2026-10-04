@@ -19,9 +19,11 @@ def test_admin_shows_loading_and_independent_request_failures():
 def test_officer_shows_loading_and_preserves_successful_sibling():
     s=source('OfficerDashboard.jsx')
     assert 'const [loading,setLoading]=useState(true)' in s
-    assert 'Promise.allSettled' in s
+    assert 'API.ticketStats(undefined,options)' in s
+    assert 'API.tickets({page:1,pageSize:8},options)' in s
     assert 'Loading dashboard statistics' in s
-    assert "result.status==='rejected'" in s
+    assert "failed('Dashboard statistics',e)" in s
+    assert "failed('Recent tickets',e)" in s
     assert 'setLoading(false)' in s
 
 

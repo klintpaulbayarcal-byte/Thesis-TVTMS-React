@@ -256,7 +256,17 @@ function tickets_mark_unpaid(array $params): never
 function tickets_stats(array $params=[]): never
 {
     $u=require_role(['admin','apprehending_officer']);$stats=supabase_rpc('tvtms_ticket_stats',['p_user_id'=>$u['role']==='apprehending_officer'?(int)$u['id']:null]);
-    if(!is_array($stats))$stats=[];ok('Dashboard stats fetched successfully',$stats,['stats'=>$stats]);
+    if(!is_array($stats))$stats=[];
+    // Count the complete Manila day, independently of the recent-ticket page.
+    // This also works with the existing production stats RPC (no migration).
+    $query=['select'=>'id','date_issued'=>'eq.'.manila_today(),'limit'=>0];
+    if($u['role']==='apprehending_officer')$query['user_id']='eq.'.(int)$u['id'];
+    $count=supabase_request('GET','/rest/v1/tickets',$query,null,['Prefer: count=exact']);
+    if(!preg_match('/\/(\d+)$/D',(string)($count['headers']['content-range']??''),$matches)){
+        throw new RuntimeException('The exact daily ticket count is unavailable.');
+    }
+    $stats['today']=(int)$matches[1];
+    ok('Dashboard stats fetched successfully',$stats,['stats'=>$stats]);
 }
 function tickets_search(array $params=[]): never
 {
