@@ -148,7 +148,13 @@ function rate_limit_check(string $bucket,int $max,int $windowSeconds,?string $ip
     $fh=@fopen($file,'c+');
     if(!$fh)return $unavailable;
     try{
-        if(!@flock($fh,LOCK_EX|LOCK_NB))return $unavailable;
+        $locked=false;
+        $deadline=microtime(true)+0.5;
+        do{
+            if(@flock($fh,LOCK_EX|LOCK_NB)){$locked=true;break;}
+            usleep(10000);
+        }while(microtime(true)<$deadline);
+        if(!$locked)return $unavailable;
         $raw=@stream_get_contents($fh);
         if($raw===false)return $unavailable;
         $state=$raw!==''?json_decode($raw,true):['start'=>$now,'count'=>0];
