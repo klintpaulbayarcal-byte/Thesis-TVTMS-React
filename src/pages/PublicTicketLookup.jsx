@@ -141,9 +141,16 @@ export default function PublicTicketLookup(){
             <div><dt>Selected violations</dt><dd>{ticket.violations?.length||1}</dd></div><div><dt>Total citation penalty</dt><dd>{money(ticket.penalty_amount)}</dd></div>
             <div><dt>Paid</dt><dd>{money(ticket.total_paid)}</dd></div><div><dt>Balance</dt><dd>{money(ticket.remaining_balance)}</dd></div>
             {ticket.appearance_due_date&&<div><dt>Report/appear by</dt><dd>{dateOnly(ticket.appearance_due_date)}</dd></div>}
+            <div><dt>Dispute filing</dt><dd>{canFilePublicDispute(ticket)
+              ? `Available until ${dateOnly(ticket.dispute_deadline_date)}`
+              : ticket.dispute_message?.includes('period has ended')
+                ? 'Dispute period ended'
+                : ticket.dispute_deadline_date
+                  ? `Deadline: ${dateOnly(ticket.dispute_deadline_date)}`
+                  : 'Not available'}</dd></div>
           </dl>
           <CitationViolations ticket={ticket} publicView/>
-          {canFilePublicDispute(ticket)?<button type="button" className="dispute-trigger" disabled={disputeSubmitting} onClick={()=>openDispute(ticket)}>File a Dispute</button>:<div className="dispute-ineligible"><strong>Dispute unavailable for this ticket.</strong><Notice type="info">{ticket.dispute_message||'This ticket is not eligible for a dispute.'}</Notice><p>If you need clarification, please contact the issuing office.</p></div>}
+          {canFilePublicDispute(ticket)?<><Notice type="info">Online dispute filing is available through {dateOnly(ticket.dispute_deadline_date)}. Eligibility is evaluated using Asia/Manila dates.</Notice><button type="button" className="dispute-trigger" disabled={disputeSubmitting} onClick={()=>openDispute(ticket)}>File a Dispute</button></>:<div className="dispute-ineligible"><strong>Dispute unavailable for this ticket.</strong><Notice type="info">{ticket.dispute_message||'This ticket is not eligible for a dispute.'}</Notice><p>If you need clarification, please contact the issuing office.</p></div>}
         </article>)}
       </section>
 

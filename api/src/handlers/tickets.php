@@ -270,7 +270,45 @@ function tickets_stats(array $params=[]): never
 }
 function tickets_search(array $params=[]): never
 {
-    $u=require_role(['admin','apprehending_officer']);$search=trim((string)($_GET['search']??''));if($search==='')fail('Search query is required',400,'VALIDATION_ERROR');
-    $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_list',['p_filters'=>['search'=>$search,'officerId'=>$u['role']==='apprehending_officer'?(int)$u['id']:null,'sortBy'=>'date_issued','sortOrder'=>'DESC','pageSize'=>50,'offset'=>0]]));$tickets=$r['tickets']??[];$tickets=ticket_enrich_payment_totals(is_array($tickets)?$tickets:[]);
-    ok('Tickets fetched successfully',$tickets,['tickets'=>$tickets]);
+    $u=require_role(['admin','apprehending_officer']);
+    $search=trim((string)($_GET['search']??''));
+    $mode=strtolower(trim((string)($_GET['mode']??'general')));
+    if($search===''||text_length($search)>100)fail('A search query of 1–100 characters is required',400,'VALIDATION_ERROR');
+    if(!in_array($mode,['general','citation','license','name'],true))fail('Invalid ticket search mode',400,'VALIDATION_ERROR');
+
+    // Preserve the existing broad ticket search for callers that do not specify a mode.
+    if($mode==='general'){
+        $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_list',['p_filters'=>[
+            'search'=>$search,
+            'officerId'=>$u['role']==='apprehending_officer'?(int)$u['id']:null,
+            'sortBy'=>'date_issued','sortOrder'=>'DESC','pageSize'=>50,'offset'=>0
+        ]]));
+        $tickets=$r['tickets']??[];
+        $tickets=ticket_enrich_payment_totals(is_array($tickets)?$tickets:[]);
+        ok('Tickets fetched successfully',$tickets,['tickets'=>$tickets,'mode'=>$mode]);
+    }
+
+    $filters=[];
+    if($u['role']==='apprehending_officer')$filters['user_id']='eq.'.(int)$u['id'];
+
+    if($mode==='citation'){
+        $citation=strtoupper($search);
+        if(!preg_match('/^[A-Z0-9][A-Z0-9\\/-]{0,29}$/',$citation))fail('Enter a valid citation number',400,'VALIDATION_ERROR');
+        $filters['ticket_number']='ilike.'.$citation;
+    }elseif($mode==='license'){
+        $license=strtoupper($search);
+        if(text_length($license)<5||text_length($license)>30||!preg_match('/^[A-Z0-9 .\\/-]+$/',$license))fail('Enter a valid driver license number',400,'VALIDATION_ERROR');
+        // Revised citations snapshot the license at issuance. Exact case-insensitive
+        // matching links the same licensed driver across vehicles without guessing.
+        $filters['driver_license_number']='ilike.'.$license;
+    }else{
+        if(text_length($search)<2||!preg_match("/^[\\pL\\pN .'-]+$/u",$search))fail('Enter at least part of the registered owner or driver name',400,'VALIDATION_ERROR');
+        $filters['or']='(owner_name.ilike.*'.$search.'*,driver_first_name.ilike.*'.$search.'*,driver_middle_name.ilike.*'.$search.'*,driver_last_name.ilike.*'.$search.'*)';
+    }
+
+    $tickets=supabase_select('ticket_details',$filters,[
+        'select'=>'*','order'=>'date_issued.desc,time_issued.desc','limit'=>50
+    ]);
+    $tickets=ticket_enrich_payment_totals($tickets);
+    ok('Tickets fetched successfully',$tickets,['tickets'=>$tickets,'mode'=>$mode]);
 }

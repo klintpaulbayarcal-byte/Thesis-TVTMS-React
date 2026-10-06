@@ -336,6 +336,7 @@ export default function IssueTicket() {
         {' · '}same-plate occurrence {preview?.[violation.id]?.nextOffenseCount ?? 'Unavailable'}
         {form.violation_descriptions[violation.id] && ` · ${form.violation_descriptions[violation.id]}`}
       </li>)}</ul>
+      <p className="citation-deadline-note"><strong>Total Citation Penalty: {total == null ? 'Unavailable' : money(total)}</strong></p>
       <p className="citation-deadline-note">Email delivery failure will not undo a successfully issued citation.</p>
     </Modal>
   </div>;

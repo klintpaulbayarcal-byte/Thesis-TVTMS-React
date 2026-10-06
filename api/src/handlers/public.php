@@ -1,6 +1,17 @@
 <?php
 declare(strict_types=1);
 
+function public_dispute_deadline_date(array $ticket): ?string
+{
+    $zone=new DateTimeZone('Asia/Manila');
+    $issued=DateTimeImmutable::createFromFormat('!Y-m-d',(string)($ticket['date_issued']??''),$zone);
+    $dateErrors=DateTimeImmutable::getLastErrors();
+    if(!$issued||($dateErrors&&($dateErrors['warning_count']||$dateErrors['error_count'])))return null;
+    $days=(int)($ticket['dispute_deadline_days']??15);
+    if($days<1||$days>365)return null;
+    return $issued->modify('+'.$days.' days')->format('Y-m-d');
+}
+
 function public_dispute_eligibility_message(array $ticket,?DateTimeImmutable $today=null): string
 {
     if(!empty($ticket['has_recorded_payment'])||(float)($ticket['total_paid']??0)>0)return 'Tickets with any recorded payment cannot be disputed.';
@@ -29,7 +40,9 @@ function public_ticket_lookup(array $params=[]): never
             'status'=>$t['payment_status']??$t['status']??'unpaid','payment_date'=>$t['payment_date']??null,
             'penalty_amount'=>$t['penalty_amount']??0,'total_paid'=>$t['total_paid']??0,'remaining_balance'=>$t['remaining_balance']??0,
             'has_recorded_payment'=>!empty($t['has_recorded_payment'])||(float)($t['total_paid']??0)>0,
-            'has_notification_email'=>(bool)($t['has_notification_email']??false),'dispute_eligible'=>$msg==='','dispute_message'=>$msg];
+            'has_notification_email'=>(bool)($t['has_notification_email']??false),
+            'dispute_eligible'=>$msg==='','dispute_message'=>$msg,
+            'dispute_deadline_date'=>public_dispute_deadline_date($t)];
     }
     unset($t);
     json_response(['success'=>true,'count'=>count($tickets),'tickets'=>$tickets]);
