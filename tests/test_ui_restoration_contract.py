@@ -32,10 +32,13 @@ def test_admin_dashboard_restores_operations_and_premium_sections():
         assert marker in page, f'Admin dashboard should restore finalized marker: {marker}'
 
 
-def test_officer_dashboard_restores_finalized_welcome_and_actions():
+def test_officer_dashboard_preserves_core_sections_without_quick_actions():
     page = text('src/pages/OfficerDashboard.jsx')
-    for marker in ['officer-welcome-banner', 'Issue New Ticket', 'Search Ticket', 'My Recent Tickets', 'Quick Actions']:
-        assert marker in page, f'Officer dashboard should restore finalized marker: {marker}'
+    for marker in ['officer-welcome-banner', 'Issue New Ticket', 'Search Ticket', 'My Recent Tickets']:
+        assert marker in page, f'Officer dashboard should preserve core marker: {marker}'
+    assert 'Quick Actions' not in page
+    assert 'officer-quick-grid' not in page
+    assert 'className="officer-action' not in page
 
 
 def test_shared_components_use_legacy_compatible_dashboard_classes():
