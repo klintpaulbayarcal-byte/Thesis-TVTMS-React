@@ -90,6 +90,8 @@ def test_legacy_landing_redirect_precedes_static_files_and_removes_only_that_fil
     assert len(active_delete_lines) == 2
     allowed_exact_deletes = {
         '/assets/.in.calape-logo-d94tlkub.webp.',
+        '/assets/.in.index-biyupbf7.js.',
+        '/assets/.in.index-drzlsyi5.css.',
         '/pages/landing.html',
     }
     found_exact_deletes = set()
