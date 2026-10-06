@@ -169,7 +169,7 @@ export const API = {
   permanentDeleteTicket: (id, reason) => apiRequest(`/tickets/${id}/permanent`, { method: 'DELETE', body: JSON.stringify({ reason }) }),
   markUnpaid: (id, reason) => apiRequest(`/tickets/${id}/mark-unpaid`, { method: 'PUT', body: JSON.stringify({ reason }) }),
   ticketStats: (filters, options) => apiRequest(`/tickets/stats${qs(filters) ? `?${qs(filters)}` : ''}`, options),
-  searchTickets: search => apiRequest(`/tickets/search?${qs({ search })}`),
+  searchTickets: (search, mode) => apiRequest(`/tickets/search?${qs({ search, mode })}`),
 
   paymentsForTicket: id => apiRequest(`/payments/ticket/${id}`),
   recordPayment: data => apiRequest('/payments', { method: 'POST', body: JSON.stringify(data) }),
