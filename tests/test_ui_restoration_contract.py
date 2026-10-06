@@ -34,7 +34,7 @@ def test_admin_dashboard_restores_operations_and_premium_sections():
 
 def test_officer_dashboard_restores_finalized_welcome_and_actions():
     page = text('src/pages/OfficerDashboard.jsx')
-    for marker in ['officer-welcome-banner', 'Issue New Ticket', 'Search Violator', 'My Recent Tickets', 'Quick Actions']:
+    for marker in ['officer-welcome-banner', 'Issue New Ticket', 'Search Ticket', 'My Recent Tickets', 'Quick Actions']:
         assert marker in page, f'Officer dashboard should restore finalized marker: {marker}'
 
 
@@ -78,10 +78,10 @@ def test_issue_ticket_restores_finalized_form_structure():
     assert 'Incident Information' not in page
 
 
-def test_violator_lookup_restores_finalized_search_and_summary_sections():
+def test_search_ticket_restores_adviser_aligned_search_and_summary_sections():
     page = text('src/pages/LicensePlateLookup.jsx')
-    for marker in ['lookup-container', 'lookup-section', 'section-title', 'validation-info', 'search-tabs', 'Vehicle Information', 'Plate Ticket Summary', 'summary-cards', 'Violation Tickets']:
-        assert marker in page, f'Violator lookup should restore finalized marker: {marker}'
+    for marker in ['lookup-container', 'lookup-section', 'section-title', 'Search Ticket', 'search-tabs', 'By Citation Number', 'By Plate Number', 'By License Number', 'By Owner / Driver Name', 'Driver Citation History', 'Vehicle Information', 'Plate Ticket Summary', 'summary-cards', 'Plate Citation History']:
+        assert marker in page, f'Search Ticket should preserve adviser-aligned marker: {marker}'
 
 
 def test_secondary_staff_pages_restore_finalized_page_structures():
