@@ -87,12 +87,21 @@ def test_legacy_landing_redirect_precedes_static_files_and_removes_only_that_fil
         for line in workflow.splitlines()
         if 'rm -f ' in line and not line.lstrip().startswith('#')
     ]
-    assert len(active_delete_lines) == 1
-    release_command = active_delete_lines[0]
-    assert 'rm -f /pages/landing.html' in release_command
-    assert 'rm -r' not in release_command
-    assert 'rm -rf' not in release_command
-    assert 'rmdir ' not in release_command
+    assert len(active_delete_lines) == 2
+    allowed_exact_deletes = {
+        '/assets/.in.calape-logo-d94tlkub.webp.',
+        '/pages/landing.html',
+    }
+    found_exact_deletes = set()
+    for command in active_delete_lines:
+        assert 'rm -r' not in command
+        assert 'rm -rf' not in command
+        assert 'rmdir ' not in command
+        assert '*' not in command
+        for path in allowed_exact_deletes:
+            if f'rm -f {path}' in command:
+                found_exact_deletes.add(path)
+    assert found_exact_deletes == allowed_exact_deletes
     redirect_check = '- name: verify the exact legacy redirect before cleanup'
     delete_step = '- name: remove only the obsolete deployed landing file'
     assert redirect_check in workflow
