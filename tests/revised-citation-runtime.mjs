@@ -13,7 +13,7 @@ await db.exec('create role anon; create role authenticated; create role service_
 await db.exec(fs.readFileSync('supabase/schema/database.postgres.sql','utf8'));
 const migrations=fs.readdirSync('supabase/migrations').filter(x=>x.endsWith('.sql')).sort();
 const revised=migrations.find(x=>x.includes('revised_traffic_citation_flat_penalty'));
-for(const name of migrations.filter(x=>x!==revised))await db.exec(fs.readFileSync('supabase/migrations/'+name,'utf8'));
+for(const name of migrations.filter(x=>x<revised))await db.exec(fs.readFileSync('supabase/migrations/'+name,'utf8'));
 await db.exec(`insert into public.users(id,name,email,password,role) values
  (9001,'Test Officer','officer@example.test','not-a-login','apprehending_officer'),
  (9002,'Test Admin','admin@example.test','not-a-login','admin');
@@ -50,6 +50,7 @@ async function assertHistoricalPenalties() {
  }
 }
 await db.exec(fs.readFileSync('supabase/migrations/'+revised,'utf8'));
+for(const name of migrations.filter(x=>x>revised))await db.exec(fs.readFileSync('supabase/migrations/'+name,'utf8'));
 const officialIds=(await query('select id from public.violations where is_citation_selectable and status=$1 order by id',['active'])).map(row=>Number(row.id));
 await db.exec("update public.users set officer_rank='Police Corporal' where id=9001;");
 let serial=8000;
@@ -307,7 +308,7 @@ test('report citation counts and collections never multiply; frequency counts ch
  const revenue=(await rpc('tvtms_report_collection_totals',[JSON.stringify([today,today])]))[0];assert.equal(Number(revenue.totalAmount),Number((await query("select coalesce(sum(amount_paid),0) n from public.payments where payment_status<>'voided'"))[0].n));
  await rpc('tvtms_report_hotspots',[JSON.stringify([today,today])]);
  const locations=await rpc('tvtms_report_barangay',[JSON.stringify([])]);
- const testLocation=locations.find(r=>r.barangay==='test barangay');
+ const testLocation=locations.find(r=>r.barangay==='Test Barangay');
  assert.ok(testLocation);assert.ok(testLocation.top_violations.includes(issued.violations[0].violation_name));
  assert.equal(Number(testLocation.total_tickets),Number((await query("select count(*) n from public.tickets where location='Test Barangay'"))[0].n));
 });

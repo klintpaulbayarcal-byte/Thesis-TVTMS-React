@@ -1,3 +1,4 @@
+import * as paymentStatus from '../src/utils/paymentStatus.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -58,7 +59,7 @@ function dashboard(api){
  const values=[];let index=0,deps,queued,cleanup;
  const hooks={useState:initial=>{const slot=index++;if(!(slot in values))values[slot]=initial;return[values[slot],next=>{values[slot]=typeof next==='function'?next(values[slot]):next;}];},useMemo:fn=>fn(),useEffect:(fn,nextDeps)=>{if(!deps||nextDeps.some((d,i)=>d!==deps[i])){queued=fn;deps=nextDeps;}}};
  const elements={jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})};
- const bindings={'react':hooks,'react/jsx-runtime':elements,'react-router-dom':{Link:'Link',useNavigate:()=>()=>{}},'../services/api':{API:api},'../context/AuthContext':{useAuth:()=>({user:{name:'TEST ONLY'}})},'../utils/format':format};
+ const bindings={'react':hooks,'react/jsx-runtime':elements,'react-router-dom':{Link:'Link',useNavigate:()=>()=>{}},'../services/api':{API:api},'../context/AuthContext':{useAuth:()=>({user:{name:'TEST ONLY'}})},'../utils/format':format,'../utils/paymentStatus':paymentStatus};
  const output=ts.transpileModule(fs.readFileSync('src/pages/OfficerDashboard.jsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
  const exports={};vm.runInNewContext(output,{exports,require:name=>bindings[name]??{default:name.split('/').at(-1)},AbortController});
  const render=()=>{index=0;return exports.default();};

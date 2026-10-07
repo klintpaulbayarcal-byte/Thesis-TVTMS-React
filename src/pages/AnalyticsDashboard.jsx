@@ -61,6 +61,7 @@ export default function AnalyticsDashboard(){
   const paymentRows=useMemo(()=>[
     {label:'Paid',value:breakdown.paid||0},
     {label:'Unpaid',value:breakdown.unpaid||0},
+    {label:'Partially paid',value:breakdown.partially_paid||0},
     {label:'Disputed',value:breakdown.disputed||0},
     {label:'Cancelled',value:breakdown.cancelled||0}
   ],[breakdown]);

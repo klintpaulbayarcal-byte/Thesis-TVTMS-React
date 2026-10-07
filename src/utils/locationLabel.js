@@ -12,5 +12,6 @@ export function isCoordinateLocation(raw) {
 export function displayLocation(raw) {
   const text = String(raw ?? '').trim();
   if (!text) return 'Unspecified';
+  if (/^-?\d+(?:\.\d+)?$/.test(text)) return `Incomplete coordinate: ${text}`;
   return isCoordinateLocation(text) ? `Coordinates: ${text}` : text;
 }

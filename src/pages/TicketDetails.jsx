@@ -1,3 +1,5 @@
+import { printPublicTicketQr } from '../utils/printQr';
+import { effectivePaymentStatus } from '../utils/paymentStatus';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import QRCode from 'qrcode';
@@ -201,17 +203,9 @@ export default function TicketDetails() {
 
   const printQr = () => {
     if (!qrCanvas.current || !ticket?.ticket_number) return;
-    const popup = window.open('', '_blank', 'noopener,noreferrer');
-    if (!popup) {
+    if (!printPublicTicketQr(qrCanvas.current, ticket.ticket_number)) {
       setNotice({ type: 'error', text: 'Allow pop-ups to print the ticket QR code.' });
-      return;
     }
-    popup.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Ticket QR Code</title><style>body{font-family:Arial,sans-serif;text-align:center;padding:40px;color:#0b2545}img{display:block;margin:20px auto;width:180px;height:180px}p{font-family:monospace}</style></head><body><h1>Traffic Violation Ticket</h1><p id="ticket-number"></p><img id="ticket-qr" alt="Public ticket lookup QR code"></body></html>');
-    popup.document.close();
-    popup.document.getElementById('ticket-number').textContent = ticket.ticket_number;
-    popup.document.getElementById('ticket-qr').src = qrCanvas.current.toDataURL('image/png');
-    popup.focus();
-    popup.print();
   };
 
   if (loading && !ticket) return <><PageHeader title="Citation Details"/><div className="card">Loading ticket…</div></>;
@@ -239,7 +233,7 @@ export default function TicketDetails() {
     <Notice type={notice.type} onClose={()=>setNotice({type:'',text:''})}>{notice.text}</Notice>
 
     <section className="card ticket-detail-card">
-      <div className="ticket-document-head"><div><span className="ticket-document-kicker">MUNICIPALITY OF CALAPE · BOHOL</span><h2>TRAFFIC CITATION</h2><p>Traffic Violation Ticketing &amp; Management System</p></div><div className="ticket-number-panel"><small>Citation Number</small><strong>{ticket.ticket_number}</strong><StatusBadge value={ticket.status}/></div></div>
+      <div className="ticket-document-head"><div><span className="ticket-document-kicker">MUNICIPALITY OF CALAPE · BOHOL</span><h2>TRAFFIC CITATION</h2><p>Traffic Violation Ticketing &amp; Management System</p></div><div className="ticket-number-panel"><small>Citation Number</small><strong>{ticket.ticket_number}</strong><StatusBadge value={effectivePaymentStatus(ticket)}/></div></div>
 
       <div className="ticket-detail-sections">
         <section className="ticket-info-section"><div className="ticket-section-title"><span>01</span><h3>Date & Time Information</h3></div><div className="details-grid"><div><dt>Date issued</dt><dd>{dateOnly(ticket.date_issued)}</dd></div><div><dt>Time issued</dt><dd>{ticket.time_issued || '—'}</dd></div><div className="span-2"><dt>Location</dt><dd>{ticket.location || '—'}</dd></div></div></section>
@@ -248,7 +242,7 @@ export default function TicketDetails() {
 
         <section className="ticket-info-section"><div className="ticket-section-title"><span>03</span><h3>Violation Information</h3></div><div className="details-grid"><div className="span-2"><dt>{ticket.citation_version===2?'Selected violations':'Violation'}</dt><dd>{ticket.citation_version===2?`${ticket.violations?.length??0} issued violations`:`${ticket.violation_code} · ${ticket.violation_name}`}</dd></div><div><dt>Plate Ticket Count at Issuance</dt><dd>{ticket.plate_ticket_count_at_issue??'—'}</dd></div>{ticket.citation_version!==2&&<div><dt>Legacy same-violation occurrence</dt><dd>{ticket.same_violation_offense_count_at_issue??'—'}</dd></div>}<div className="span-2"><dt>Remarks</dt><dd>{ticket.remarks || '—'}</dd></div></div></section>
 
-        <section className="ticket-info-section"><div className="ticket-section-title"><span>04</span><h3>Issued By</h3></div><div className="details-grid"><div><dt>Apprehending Officer</dt><dd>{ticket.officer_name || '—'}</dd></div><div><dt>Current Status</dt><dd><StatusBadge value={ticket.status}/></dd></div></div></section>
+        <section className="ticket-info-section"><div className="ticket-section-title"><span>04</span><h3>Issued By</h3></div><div className="details-grid"><div><dt>Apprehending Officer</dt><dd>{ticket.officer_name || '—'}</dd></div><div><dt>Current Status</dt><dd><StatusBadge value={effectivePaymentStatus(ticket)}/></dd></div></div></section>
       </div>
 
       <section className="ticket-info-section"><h3>Issued Violations</h3><CitationViolations ticket={ticket}/><p>Same-plate counts are historical monitoring information, not proof of the same driver. Revised citations use the flat penalty.</p>{ticket.legacy_penalty_recovered&&<p>Legacy penalty preserved from the catalog value available at migration; an original issue-time amount was not recorded.</p>}</section>

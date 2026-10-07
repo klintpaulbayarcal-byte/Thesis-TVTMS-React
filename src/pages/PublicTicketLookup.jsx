@@ -25,6 +25,7 @@ export default function PublicTicketLookup(){
   const [reason,setReason]=useState('');
   const [disputeNotice,setDisputeNotice]=useState({type:'',text:''});
   const [disputeSubmitting,setDisputeSubmitting]=useState(false);
+  const disputeInFlight=useRef(false);
   const normalizedQuery=useMemo(()=>query.toUpperCase(),[query]);
 
   const resetDispute=(clearSelection=true)=>{if(clearSelection)setSelected(null);setReason('');setDisputeNotice({type:'',text:''});};
@@ -77,12 +78,14 @@ export default function PublicTicketLookup(){
   };
   const dispute=async event=>{
     event.preventDefault();
-    if(disputeSubmitting)return;
+    if(disputeSubmitting||disputeInFlight.current)return;
     if(!canFilePublicDispute(selected)){setDisputeNotice({type:'error',text:'Select an eligible ticket before submitting a dispute.'});return;}
     if(reason.trim().length<10||reason.trim().length>4000){setDisputeNotice({type:'error',text:'Enter a dispute reason of 10–4000 characters.'});return;}
+    disputeInFlight.current=true;
     setDisputeSubmitting(true);setDisputeNotice({type:'',text:''});
     try{
       await API.publicDispute({ticketNumber:selected.ticket_number,plateNumber:selected.plate_number,reason:reason.trim()});
+      setTickets(rows=>rows.map(row=>row.ticket_number===selected.ticket_number?{...row,dispute_eligible:false,dispute_message:'A dispute is already open for this ticket.'}:row));
       setSelected(null);setReason('');
       setDisputeNotice({type:'success',text:'Your dispute was submitted successfully for administrator review. The ticket list will update shortly.'});
       const filters=mode==='plate'?{plateNumber:normalizedQuery}:{ticketNumber:normalizedQuery};
@@ -90,8 +93,15 @@ export default function PublicTicketLookup(){
         const refreshed=await API.publicTicketLookup(filters);
         setTickets(Array.isArray(refreshed.tickets)?refreshed.tickets:(Array.isArray(refreshed.data)?refreshed.data:[]));
       }catch{/* Keep the successful submission confirmation even if refreshing fails. */}
-    }catch(error){setDisputeNotice({type:'error',text:error.message||'Unable to submit the dispute. Please try again.'});}
-    finally{setDisputeSubmitting(false);}
+    }catch(error){
+      const uncertain=!error.status||error.status>=500;
+      if(uncertain||error.code==='DISPUTE_ALREADY_EXISTS'){
+        setTickets(rows=>rows.map(row=>row.ticket_number===selected.ticket_number?{...row,dispute_eligible:false,dispute_message:'Look up this ticket again to confirm its dispute state before another attempt.'}:row));
+        setSelected(null);
+      }
+      setDisputeNotice({type:'error',text:uncertain?'Submission could not be confirmed. It may have been saved. Look up the ticket again before attempting another submission.':error.message||'Unable to submit the dispute.'});
+    }
+    finally{disputeInFlight.current=false;setDisputeSubmitting(false);}
   };
 
   return <main className="public-lookup-page">
