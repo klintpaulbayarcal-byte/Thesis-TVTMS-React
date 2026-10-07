@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/qr_code.php';
+
 function ticket_notification_result(string $status,?string $masked,bool $retryAllowed,string $message,array $extra=[]): array
 {
     return array_merge([
@@ -28,6 +30,20 @@ function ticket_notification_message(array $claim): array
     $legacyViolation=$lines===''?'<strong>Violation:</strong> '.$e($violation).'<br>':'';
     if(!empty($claim['dateIssued']))$details.='<p><strong>Date/time issued (Asia/Manila):</strong> '.$e((string)$claim['dateIssued'].' '.(string)($claim['timeIssued']??'')).'</p>';
     if(!empty($claim['appearanceDueDate']))$details.='<p><strong>Report/appear by:</strong> '.$e((string)$claim['appearanceDueDate']).' (seven calendar days after issuance). This is separate from the payment deadline.</p>';
+    $qrImages=[];
+    $qrHtml='';
+    // The QR contains only the existing public lookup URL, never private
+    // driver/owner data. Generation is local and does not call an outside API.
+    try {
+        $png=TicketQrCode::png($link);
+        $qrImages[]=['cid'=>'tvtms-ticket-qr','bytes'=>$png];
+        $qrHtml='<p><strong>Scan your ticket QR code using your phone camera:</strong></p>'.
+            '<p><img src="cid:tvtms-ticket-qr" width="240" height="240" alt="Citation lookup QR code" style="display:block;width:240px;height:240px;max-width:100%;border:0"></p>';
+    } catch (Throwable $error) {
+        // Still send the complete citation notice and clickable link if the QR
+        // encoder fails; no second email or citation is created automatically.
+        error_log('Ticket QR image generation failed; retaining lookup link.');
+    }
     return [
         'subject'=>'Traffic Violation Notice — '.$ticket,
         'html'=>'<p>A traffic violation ticket has been issued.</p>'.
@@ -35,8 +51,11 @@ function ticket_notification_message(array $claim): array
             '<strong>Plate number:</strong> '.$e($plate).'<br>'.
             $legacyViolation.
             '<strong>Total citation penalty:</strong> ₱'.$e($penalty).'</p>'.$details.
-            '<p><a href="'.$e($link).'">View this ticket in the public lookup</a></p>'.
+            $qrHtml.
+            '<p><a href="'.$e($link).'">View your citation in the public lookup</a></p>'.
+            '<p>If you cannot scan the QR code, tap the link above or use the citation number in the public lookup. No login is required.</p>'.
             '<p>SMTP acceptance confirms only that the mail server accepted this notification.</p>',
+        'inlineImages'=>$qrImages,
     ];
 }
 
@@ -138,7 +157,7 @@ function ticket_notification_attempt(int $actorId,array $ticket=[],?string $conf
         ]);
     }
     $content=ticket_notification_message($claim);
-    $mail=send_email($recipient,$content['subject'],$content['html']);
+    $mail=send_email($recipient,$content['subject'],$content['html'],$content['inlineImages']??[]);
     $accepted=($mail['status']??'')==='accepted';
     $finalStatus=$accepted?'accepted':'failed';
     try{
