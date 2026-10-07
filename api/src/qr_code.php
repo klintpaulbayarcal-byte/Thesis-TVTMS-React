@@ -31,7 +31,7 @@ final class TicketQrCode
 
     public static function png(string $url, int $scale = 6): string
     {
-        if ($url === '' || !preg_match('~^https://[A-Za-z0-9.-]+(?::443)?/ticket-lookup\?ticket=[A-Za-z0-9%/-]+$~D', $url)) {
+        if ($url === '' || !preg_match('~^https://[A-Za-z0-9.-]+(?::443)?/ticket-lookup\?ticket=(?:[A-Za-z0-9-]|%2F)+$~D', $url)) {
             throw new InvalidArgumentException('QR target must be an HTTPS citation lookup URL.');
         }
         if ($scale < 4 || $scale > 8) throw new InvalidArgumentException('Unsupported QR scale.');
