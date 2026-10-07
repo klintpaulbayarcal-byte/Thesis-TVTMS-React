@@ -69,7 +69,40 @@ function smtp_command($socket,string $command,array $codes,string $stage): strin
     return smtp_expect($socket,$codes,$stage);
 }
 
-function smtp_send_message_result(array $smtp,string $to,string $subject,string $html): array
+/**
+ * Builds the SMTP DATA payload. Citation QR images use MIME Content-ID so
+ * supported mail clients render the QR inline without fetching a remote image.
+ * Other notifications retain their existing simple HTML message format.
+ */
+function smtp_compose_message(string $from,string $fromName,string $to,string $subject,string $html,array $inlineImages=[]): string
+{
+    $encodedSubject='=?UTF-8?B?'.base64_encode(str_replace(["\r","\n"],' ',$subject)).'?=';
+    $safeName=str_replace(["\r","\n",'"'],'',$fromName);
+    $headers="Date: ".date(DATE_RFC2822)."\r\nFrom: \"{$safeName}\" <{$from}>\r\nTo: <{$to}>\r\nSubject: {$encodedSubject}\r\nMIME-Version: 1.0\r\n";
+    if ($inlineImages===[]) {
+        $body=preg_replace('/^\./m','..',$html)??$html;
+        return $headers."Content-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n{$body}\r\n.";
+    }
+    $boundary='tvtms-citation-'.bin2hex(random_bytes(12));
+    $body="--{$boundary}\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n";
+    $body.=chunk_split(base64_encode($html),76,"\r\n");
+    foreach ($inlineImages as $image) {
+        $cid=(string)($image['cid']??'');
+        $bytes=(string)($image['bytes']??'');
+        if (!preg_match('/^[A-Za-z0-9-]{1,60}$/D',$cid)
+            || strlen($bytes)>100000
+            || !str_starts_with($bytes,"\x89PNG\r\n\x1A\n")) {
+            throw new InvalidArgumentException('Invalid inline email PNG.');
+        }
+        $body.="--{$boundary}\r\nContent-Type: image/png\r\nContent-Transfer-Encoding: base64\r\n";
+        $body.="Content-ID: <{$cid}>\r\nContent-Disposition: inline; filename=\"citation-qr.png\"\r\n\r\n";
+        $body.=chunk_split(base64_encode($bytes),76,"\r\n");
+    }
+    $body.="--{$boundary}--\r\n";
+    return $headers."Content-Type: multipart/related; boundary=\"{$boundary}\"\r\n\r\n{$body}\r\n.";
+}
+
+function smtp_send_message_result(array $smtp,string $to,string $subject,string $html,array $inlineImages=[]): array
 {
     $host=trim((string)($smtp['host']??''));
     $port=(int)($smtp['port']??0);
@@ -110,11 +143,13 @@ function smtp_send_message_result(array $smtp,string $to,string $subject,string 
         smtp_command($socket,'RCPT TO:<'.$to.'>',[250,251],'recipient');
         smtp_command($socket,'DATA',[354],'data');
 
-        $encodedSubject='=?UTF-8?B?'.base64_encode(str_replace(["\r","\n"],' ',$subject)).'?=';
-        $safeName=str_replace(["\r","\n",'"'],'',$fromName);
-        $body=preg_replace('/^\./m','..',$html)??$html;
-        $message="Date: ".date(DATE_RFC2822)."\r\nFrom: \"{$safeName}\" <{$from}>\r\nTo: <{$to}>\r\nSubject: {$encodedSubject}\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n{$body}\r\n.";
-        if(fwrite($socket,$message."\r\n")===false)throw new MailTransportException('transport_error','message_data');
+        $message=smtp_compose_message($from,$fromName,$to,$subject,$html,$inlineImages)."\r\n";
+        $sent=0;
+        while ($sent<strlen($message)) {
+            $bytes=fwrite($socket,substr($message,$sent));
+            if ($bytes===false || $bytes===0) throw new MailTransportException('transport_error','message_data');
+            $sent+=$bytes;
+        }
         smtp_expect($socket,[250,251],'message_acceptance');
 
         @fwrite($socket,"QUIT\r\n");
@@ -131,17 +166,17 @@ function smtp_send_message_result(array $smtp,string $to,string $subject,string 
     }
 }
 
-function email_send_with_config(array $smtp,string $to,string $subject,string $html): array
+function email_send_with_config(array $smtp,string $to,string $subject,string $html,array $inlineImages=[]): array
 {
     if(empty($smtp['enabled']))return mail_result('disabled','smtp_disabled','Email is not configured.');
     if(!filter_var($to,FILTER_VALIDATE_EMAIL))return mail_result('invalid_recipient','invalid_recipient','No valid recipient email is recorded.');
     if(smtp_configuration_status($smtp)!=='configured')return mail_result('configuration_error','smtp_not_configured','Email configuration is incomplete.');
-    return smtp_send_message_result($smtp,$to,$subject,$html);
+    return smtp_send_message_result($smtp,$to,$subject,$html,$inlineImages);
 }
 
-function send_email(string $to,string $subject,string $html): array
+function send_email(string $to,string $subject,string $html,array $inlineImages=[]): array
 {
-    return email_send_with_config(app_config()['smtp']??[],$to,$subject,$html);
+    return email_send_with_config(app_config()['smtp']??[],$to,$subject,$html,$inlineImages);
 }
 
 function send_basic_email(string $to,string $subject,string $html): bool
