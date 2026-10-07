@@ -1,3 +1,4 @@
+import { effectivePaymentStatus } from '../utils/paymentStatus';
 import { useEffect, useState } from 'react';
 import { API } from '../services/api';
 import DataTable from '../components/DataTable';
@@ -5,16 +6,16 @@ import StatusBadge from '../components/StatusBadge';
 import Notice from '../components/Notice';
 import Modal from '../components/Modal';
 import Icon from '../components/Icon';
-import { firstArray, money, dateOnly } from '../utils/format';
+import { firstArray, money, dateOnly, manilaDateKey } from '../utils/format';
 
-const blankPayment=()=>({amount_paid:'',official_receipt_number:'',payment_method:'cash',payment_date:new Date().toISOString().slice(0,10),notes:''});
+const blankPayment=()=>({amount_paid:'',official_receipt_number:'',payment_method:'cash',payment_date:manilaDateKey(),notes:''});
 export default function Payments(){
   const [tickets,setTickets]=useState([]);const [selected,setSelected]=useState(null);const [payments,setPayments]=useState([]);const [notice,setNotice]=useState({type:'',text:''});const [open,setOpen]=useState(false);const [form,setForm]=useState(blankPayment());
   const load=()=>API.tickets({status:'unpaid',pageSize:100}).then(response=>setTickets(firstArray(response,['tickets']))).catch(error=>setNotice({type:'error',text:error.message}));
   useEffect(()=>{load();},[]);
   const select=async row=>{setSelected(row);try{const response=await API.paymentsForTicket(row.id);setPayments(firstArray(response,['payments']));}catch(error){setNotice({type:'error',text:error.message});}};
   const record=async()=>{try{await API.recordPayment({ticket_id:selected.id,...form,amount_paid:Number(form.amount_paid)});setOpen(false);setNotice({type:'success',text:'Payment recorded successfully.'});const fresh=await API.ticket(selected.id);const refreshed=fresh?.ticket||fresh?.data||selected;setSelected(refreshed);const paymentResponse=await API.paymentsForTicket(selected.id);setPayments(firstArray(paymentResponse,['payments']));await load();setForm(blankPayment());}catch(error){setNotice({type:'error',text:error.message});}};
-  const columns=[{key:'ticket_number',label:'Ticket'},{key:'plate_number',label:'Plate'},{key:'owner_name',label:'Owner'},{key:'penalty_amount',label:'Penalty',render:row=>money(row.penalty_amount)},{key:'total_paid',label:'Paid',render:row=>money(row.total_paid)},{key:'remaining_balance',label:'Balance',render:row=>money(row.remaining_balance)},{key:'status',label:'Status',render:row=><StatusBadge value={row.status}/>}];
+  const columns=[{key:'ticket_number',label:'Ticket'},{key:'plate_number',label:'Plate'},{key:'owner_name',label:'Owner'},{key:'penalty_amount',label:'Penalty',render:row=>money(row.penalty_amount)},{key:'total_paid',label:'Paid',render:row=>money(row.total_paid)},{key:'remaining_balance',label:'Balance',render:row=>money(row.remaining_balance)},{key:'status',label:'Status',render:row=><StatusBadge value={effectivePaymentStatus(row)}/>}];
   return <div className="restored-payments-page">
     <Notice type={notice.type}>{notice.text}</Notice>
     <section className="card"><div className="card-header"><div><h3 className="card-title">Record Ticket Payment</h3><p>Select an unpaid ticket to review its balance and record an official payment.</p></div></div><div className="card-body"><DataTable columns={columns} rows={tickets} onRowClick={select}/></div></section>

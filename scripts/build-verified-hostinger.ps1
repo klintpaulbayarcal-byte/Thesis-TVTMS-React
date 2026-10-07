@@ -30,13 +30,13 @@ if (Test-Path (Join-Path $localPythonBin 'python.exe') -PathType Leaf) {
     $env:Path = "$localPythonBin;$env:Path"
 }
 
-foreach ($cmd in @('node', 'npm', 'python')) {
+foreach ($cmd in @('node', 'npm.cmd')) {
     if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) { throw "Required local command is unavailable: $cmd" }
 }
 
-Invoke-NativeStep 'Fresh dependency installation' { npm ci --no-audit --no-fund }
-Invoke-NativeStep 'JSX syntax and import verification' { npm run verify:jsx }
-Invoke-NativeStep 'Full Python contract and isolated runtime tests' { python -m pytest -q -s -p no:cacheprovider tests }
+Invoke-NativeStep 'Fresh dependency installation' { npm.cmd ci --no-audit --no-fund }
+Invoke-NativeStep 'JSX syntax and import verification' { npm.cmd run verify:jsx }
+Invoke-NativeStep 'Full Python contract and isolated runtime tests' { npm.cmd test }
 
 Write-Host "`n== PHP lint ==" -ForegroundColor Cyan
 $phpFiles = @(Get-ChildItem (Join-Path $root 'api') -Filter '*.php' -Recurse -File)
@@ -46,7 +46,7 @@ foreach ($file in $phpFiles) {
     if ($LASTEXITCODE -ne 0) { throw "PHP syntax error: $($file.FullName)" }
 }
 Write-Host "Checked $($phpFiles.Count) PHP files."
-Invoke-NativeStep 'Fresh React compilation and Hostinger assembly' { npm run build:hostinger }
+Invoke-NativeStep 'Fresh React compilation and Hostinger assembly' { npm.cmd run build:hostinger }
 
 $deploy = Join-Path $root 'deploy'
 $required = @(

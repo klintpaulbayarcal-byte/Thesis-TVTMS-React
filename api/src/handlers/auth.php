@@ -53,5 +53,5 @@ function auth_reset_password(array $params=[]): never
 
 function auth_profile(array $params=[]): never
 {
-    $u=require_role(['admin','apprehending_officer']);$rows=supabase_select('users',['id'=>'eq.'.(int)$u['id']],['select'=>'id,name,email,role,contact_number,plate_number,created_at','limit'=>1]);if(!$rows)fail('User not found',404,'USER_NOT_FOUND');json_response(['success'=>true,'user'=>$rows[0],'data'=>$rows[0]]);
+    $u=require_role(['admin','apprehending_officer']);$rows=supabase_select('users',['id'=>'eq.'.(int)$u['id']],['select'=>'id,name,email,role,officer_rank,contact_number,plate_number,created_at','limit'=>1]);if(!$rows)fail('User not found',404,'USER_NOT_FOUND');json_response(['success'=>true,'user'=>$rows[0],'data'=>$rows[0]]);
 }

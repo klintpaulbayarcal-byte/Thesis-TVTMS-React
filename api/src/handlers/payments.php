@@ -10,7 +10,8 @@ function payments_record(array $params=[]): never
 {
     $u=require_role(['admin']);$b=json_input();$ticketId=(int)($b['ticket_id']??0);$receipt=strtoupper(trim((string)($b['official_receipt_number']??$b['or_number']??'')));
     $amount=(float)($b['amount_paid']??0);$method=strtolower(trim((string)($b['payment_method']??'cash')));$notes=clean_string($b['notes']??'',2000);
-    $date=(string)($b['payment_date']??'');if(!payment_valid_ymd($date))$date=manila_today();
+    $date=array_key_exists('payment_date',$b)?$b['payment_date']:manila_today();
+    if(!is_string($date)||!payment_valid_ymd($date))fail('A valid payment date in YYYY-MM-DD format is required',400,'INVALID_PAYMENT_DATE');
     if($ticketId<=0||$receipt===''||strlen($receipt)>50||$amount<=0||$amount>10000000||abs(round($amount,2)-$amount)>0.000001)fail('Valid ticket, official receipt number, and a positive amount with at most two decimal places are required',400,'VALIDATION_ERROR');
     if(!in_array($method,['cash','gcash','maya','bank_transfer','other'],true))fail('Invalid payment method',400,'VALIDATION_ERROR');
     if($date>manila_today())fail('Payment date cannot be in the future',400,'INVALID_PAYMENT_DATE');

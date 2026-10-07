@@ -26,6 +26,42 @@ export class ApiError extends Error {
   }
 }
 
+export const API_READ_TIMEOUT_MS = 45000;
+
+async function withReadDeadline(options, request) {
+  const { timeoutMs = API_READ_TIMEOUT_MS, ...fetchOptions } = options;
+  // Preserve existing write behavior. A cancelled write may still commit;
+  // reads can be retried explicitly without replaying a mutation.
+  if (!['GET', 'HEAD'].includes(String(fetchOptions.method || 'GET').toUpperCase())) return request(fetchOptions);
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new TypeError('A positive read timeout is required.');
+  const callerSignal = fetchOptions.signal;
+  if (callerSignal?.aborted) throw callerSignal.reason || new DOMException('Request cancelled.', 'AbortError');
+  const controller = new AbortController();
+  let rejectDeadline;
+  const deadline = new Promise((_, reject) => { rejectDeadline = reject; });
+  const cancel = () => {
+    const reason = callerSignal.reason || new DOMException('Request cancelled.', 'AbortError');
+    controller.abort(reason); rejectDeadline(reason);
+  };
+  callerSignal?.addEventListener('abort', cancel, { once: true });
+  const timer = setTimeout(() => {
+    const error = new ApiError('The TVTMS request timed out. Please retry.', 0, 'REQUEST_TIMEOUT');
+    controller.abort(error); rejectDeadline(error);
+  }, timeoutMs);
+  try {
+    // Bound both the transport and response-body read, including transports
+    // that fail to settle on abort. The rejected sibling remains observed.
+    const work = Promise.resolve().then(() => {
+      if (controller.signal.aborted) throw controller.signal.reason;
+      return request({ ...fetchOptions, signal: controller.signal });
+    });
+    return await Promise.race([work, deadline]);
+  } finally {
+    clearTimeout(timer);
+    callerSignal?.removeEventListener('abort', cancel);
+  }
+}
+
 export async function apiRequest(endpoint, options = {}) {
   const token = getStoredToken();
   const headers = new Headers(options.headers || {});
@@ -33,26 +69,33 @@ export async function apiRequest(endpoint, options = {}) {
   const isForm = typeof FormData !== 'undefined' && options.body instanceof FormData;
   if (!isForm && options.body != null && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
 
-  let response;
-  try {
-    response = await fetch(`${API_BASE}${endpoint}`, { cache: 'no-store', ...options, headers });
-  } catch {
-    throw new ApiError('Unable to connect to the TVTMS service. Check your connection and try again.', 0, 'NETWORK_ERROR');
-  }
+  return withReadDeadline(options, async requestOptions => {
+    let response;
+    try {
+      response = await fetch(`${API_BASE}${endpoint}`, { cache: 'no-store', ...requestOptions, headers });
+    } catch {
+      if (requestOptions.signal?.aborted) throw requestOptions.signal.reason;
+      throw new ApiError('Unable to connect to the TVTMS service. Check your connection and try again.', 0, 'NETWORK_ERROR');
+    }
 
   const contentType = response.headers.get('content-type') || '';
-  const payload = contentType.includes('application/json') ? await response.json().catch(() => ({})) : null;
+  const payload = contentType.includes('application/json') ? await response.json().catch(() => {
+    if (requestOptions.signal?.aborted) throw requestOptions.signal.reason;
+    return {};
+  }) : null;
   if (!response.ok) {
     if (response.status === 401) clearSession();
     throw new ApiError(payload?.message || `Request failed (${response.status})`, response.status, payload?.errorCode || 'API_ERROR', payload);
   }
   return payload ?? response;
+  });
 }
 
-export async function apiBlobRequest(endpoint) {
+export async function apiBlobRequest(endpoint, options = {}) {
   const token = getStoredToken();
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    cache: 'no-store',
+  return withReadDeadline(options, async requestOptions => {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+    cache: 'no-store', ...requestOptions,
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!response.ok) {
@@ -60,6 +103,7 @@ export async function apiBlobRequest(endpoint) {
     throw new ApiError(payload?.message || 'Unable to download file.', response.status, payload?.errorCode);
   }
   return response.blob();
+  });
 }
 
 const qs = (params = {}) => {
@@ -69,6 +113,12 @@ const qs = (params = {}) => {
   });
   return s.toString();
 };
+
+const notificationCancelled = () => ({notification:{
+  status:'confirmation_cancelled',
+  message:'No email was sent. Recipient confirmation was cancelled.',
+  retryAllowed:true,
+}});
 
 export const API = {
   health: () => apiRequest('/health'),
@@ -97,16 +147,29 @@ export const API = {
   deleteViolation: id => apiRequest(`/violations/${id}`, { method: 'DELETE' }),
   penaltyPreview: (id, plateNumber) => apiRequest(`/violations/${id}/penalty-preview?${qs({ plateNumber })}`),
 
-  tickets: filters => apiRequest(`/tickets${qs(filters) ? `?${qs(filters)}` : ''}`),
+  tickets: (filters, options) => apiRequest(`/tickets${qs(filters) ? `?${qs(filters)}` : ''}`, options),
   ticket: id => apiRequest(`/tickets/${id}`),
+  citationContext: () => apiRequest('/tickets/issuance-context'),
   createTicket: data => apiRequest('/tickets', { method: 'POST', body: JSON.stringify(data) }),
+  retryTicketNotification: (id, data) => {
+    let confirmation=data;
+    if(!confirmation){
+      if(typeof window==='undefined'||typeof window.prompt!=='function')return Promise.resolve(notificationCancelled());
+      const entered=window.prompt('Enter the recipient email recorded when this citation was issued. For a new citation, use the cited driver email shown in its details:');
+      const recipient=String(entered??'').trim();
+      if(!recipient)return Promise.resolve(notificationCancelled());
+      if(typeof window.confirm!=='function'||!window.confirm(`Please verify the intended recipient for this specific ticket:\n${recipient}\n\nSend a ticket notification to this exact address?`))return Promise.resolve(notificationCancelled());
+      confirmation={recipient_email:recipient,recipient_email_confirmed:true};
+    }
+    return apiRequest(`/tickets/${id}/notification/retry`, { method: 'POST', body: JSON.stringify(confirmation) });
+  },
   updateTicket: (id, data) => apiRequest(`/tickets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   updateTicketDetails: (id, data) => apiRequest(`/tickets/${id}/details`, { method: 'PUT', body: JSON.stringify(data) }),
   cancelTicket: (id, reason) => apiRequest(`/tickets/${id}`, { method: 'DELETE', body: JSON.stringify({ reason }) }),
   permanentDeleteTicket: (id, reason) => apiRequest(`/tickets/${id}/permanent`, { method: 'DELETE', body: JSON.stringify({ reason }) }),
   markUnpaid: (id, reason) => apiRequest(`/tickets/${id}/mark-unpaid`, { method: 'PUT', body: JSON.stringify({ reason }) }),
-  ticketStats: filters => apiRequest(`/tickets/stats${qs(filters) ? `?${qs(filters)}` : ''}`),
-  searchTickets: search => apiRequest(`/tickets/search?${qs({ search })}`),
+  ticketStats: (filters, options) => apiRequest(`/tickets/stats${qs(filters) ? `?${qs(filters)}` : ''}`, options),
+  searchTickets: (search, mode) => apiRequest(`/tickets/search?${qs({ search, mode })}`),
 
   paymentsForTicket: id => apiRequest(`/payments/ticket/${id}`),
   recordPayment: data => apiRequest('/payments', { method: 'POST', body: JSON.stringify(data) }),
@@ -147,7 +210,15 @@ export const API = {
   publicVehicleLookup: plateNumber => apiRequest(`/public/vehicle-lookup?${qs({ plateNumber })}`),
   publicPlateSummary: plateNumber => apiRequest(`/public/plate-summary?${qs({ plateNumber })}`),
   publicDispute: data => apiRequest('/public/dispute', { method: 'POST', body: JSON.stringify(data) }),
-  publicContact: data => apiRequest('/public/contact', { method: 'POST', body: JSON.stringify(data) }),
+  publicContact: async data => {
+    const result = await apiRequest('/public/contact', { method: 'POST', body: JSON.stringify(data) });
+    // Saving was successful, so do not automatically retry a failed email and duplicate the message.
+    if (result?.contact_id && result?.email_status &&
+        (result.email_status.administrator !== 'accepted' || result.email_status.confirmation !== 'accepted')) {
+      throw new ApiError(result.message || 'Your message was saved, but email delivery could not be confirmed. Please do not resubmit.', 201, 'CONTACT_SAVED_EMAIL_INCOMPLETE', result);
+    }
+    return result;
+  },
 
   report: (name, filters = {}) => apiRequest(`/reports/${name}${qs(filters) ? `?${qs(filters)}` : ''}`),
   reportPdf: filters => apiBlobRequest(`/reports/export/pdf${qs(filters) ? `?${qs(filters)}` : ''}`),
