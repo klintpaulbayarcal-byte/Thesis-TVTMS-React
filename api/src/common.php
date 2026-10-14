@@ -95,6 +95,22 @@ function clean_string(mixed $value,int $max=4000): string{$value=trim((string)$v
 function is_strong_password(string $password): bool{return strlen($password)>=12&&preg_match('/[a-z]/',$password)&&preg_match('/[A-Z]/',$password)&&preg_match('/\d/',$password)&&preg_match('/[^A-Za-z0-9]/',$password);}
 function bool_setting(mixed $v): string{return in_array($v,[true,1,'1','true','on'],true)?'1':'0';}
 
+/**
+ * Automatic email preferences are controlled by Administrator settings.
+ * Missing or unreadable preferences fail closed: no mail is sent.
+ */
+function email_notification_setting_enabled(string $key): bool
+{
+    if(!in_array($key,['send_violation_notice','send_payment_confirmation'],true))return false;
+    try{
+        $rows=supabase_select('system_settings',['setting_key'=>'eq.'.$key],['select'=>'setting_value','limit'=>1]);
+        return isset($rows[0]) && bool_setting($rows[0]['setting_value']??null)==='1';
+    }catch(Throwable){
+        error_log('TVTMS automatic email preference check unavailable: '.$key);
+        return false;
+    }
+}
+
 function client_ip_for_audit(): ?string
 {
     $ip=trim((string)($_SERVER['REMOTE_ADDR']??''));
