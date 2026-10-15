@@ -112,6 +112,7 @@ function fail_domain(array $err):never{exit(90);}
 function fail(string $m,int $s=400,string $c='ERROR',array $x=[]):never{exit(91);}
 function supabase_rpc(string $n,array $a=[]):mixed{global $calls;$calls[]=$n;return ['ticket'=>['id'=>44,'ticket_number'=>'TVT-2026-000123','owner_email'=>'recipient@example.test'],'penaltyInfo'=>[]];}
 function log_audit(?int $id,string $action,?string $type=null,?int $entity=null,array $meta=[]):void{}
+function email_notification_setting_enabled(string $key):bool{return $key==='send_violation_notice';}
 function ticket_notification_result(string $status,?string $masked,bool $retryAllowed,string $message,array $extra=[]):array{return ['status'=>$status,'message'=>$message];}
 function ticket_notification_attempt(int $actor,array $ticket=[],?string $confirmed=null):array{global $notified;$notified=$confirmed!==null;if($GLOBALS['calls']!==['tvtms_ticket_create'])throw new RuntimeException('Attempt before commit');if(THROW_NOTIFICATION)throw new RuntimeException('Simulated transport outage');return ['status'=>'failed','retryAllowed'=>true,'message'=>'Simulated email failure.'];}
 function ok(string $m,mixed $data=null,array $extra=[],int $s=200):never{echo json_encode(['status'=>$s,'ticket'=>$extra['ticket']??null,'notification'=>$extra['notification']??null,'calls'=>$GLOBALS['calls'],'sent'=>$GLOBALS['notified']]);exit;}
