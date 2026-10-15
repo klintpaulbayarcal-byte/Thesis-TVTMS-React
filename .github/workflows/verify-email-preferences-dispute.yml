@@ -1,6 +1,9 @@
 name: TVTMS targeted email and dispute tests (NO DEPLOY)
 
 on:
+  pull_request:
+    branches:
+      - sync-v4
   push:
     branches:
       - fix/email-preferences-dispute-diagnostics-20261014
