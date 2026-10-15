@@ -55,3 +55,20 @@ jobs:
           test ! -e deploy/.env.local
           test ! -e deploy/api/config/config.local.php
           test ! -e deploy/uploads
+      - name: Package verified Hostinger files (no deployment)
+        run: |
+          (cd deploy && zip -q -r ../TVTMS-review-Hostinger.zip .)
+          unzip -p TVTMS-review-Hostinger.zip index.html > /dev/null
+          unzip -p TVTMS-review-Hostinger.zip api/index.php > /dev/null
+          if unzip -Z1 TVTMS-review-Hostinger.zip | grep -Eq '(^|/)(config\\.local\\.php|\\.env|\\.env\\.local)$|(^|/)uploads/'; then
+            echo 'Refusing to upload a package containing private/runtime files' >&2
+            exit 1
+          fi
+          sha256sum TVTMS-review-Hostinger.zip
+      - name: Upload tested files for instructor-authorized deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: TVTMS-review-Hostinger
+          path: TVTMS-review-Hostinger.zip
+          retention-days: 3
+          if-no-files-found: error
