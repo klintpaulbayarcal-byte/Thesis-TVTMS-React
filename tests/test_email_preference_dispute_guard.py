@@ -22,7 +22,7 @@ def run_php(source):
 
 
 def php_function(text, name):
-    match = re.search(r"\\bfunction\\s+" + name + r"\\s*\\(", text)
+    match = re.search(r"\bfunction\s+" + re.escape(name) + r"\s*\(", text)
     assert match, f"Missing PHP function: {name}"
     start = text.index("{", match.end())
     depth = 0
