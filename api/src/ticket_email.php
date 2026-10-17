@@ -158,6 +158,15 @@ function ticket_notification_attempt(int $actorId,array $ticket=[],?string $conf
     }
     $content=ticket_notification_message($claim);
     $mail=send_email($recipient,$content['subject'],$content['html'],$content['inlineImages']??[]);
+    if(($mail['status']??'')==='unknown'){
+        // An SMTP disconnect after transmitting DATA may mean the email was
+        // accepted. Do not finalize as failed or offer a duplicate retry.
+        // The existing ledger claim will become 'unknown' after its timeout.
+        error_log('Ticket notification SMTP delivery is uncertain; suppressing retry.');
+        return ticket_notification_result('unknown',$masked,false,
+            'Ticket saved. Email delivery could not be confirmed; do not retry until the notification is investigated.',
+            ['attemptCount'=>$attempt,'ticketNumber'=>$ticketNumber]);
+    }
     $accepted=($mail['status']??'')==='accepted';
     $finalStatus=$accepted?'accepted':'failed';
     try{
