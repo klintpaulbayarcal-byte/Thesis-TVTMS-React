@@ -33,6 +33,8 @@ jobs:
           php -r 'exit(PHP_VERSION_ID >= 80100 ? 0 : 1);'
       - name: Lint changed PHP code
         run: |
+          php -l api/index.php
+          php -l api/src/mail.php
           php -l api/src/common.php
           php -l api/src/handlers/tickets.php
           php -l api/src/handlers/payments.php
