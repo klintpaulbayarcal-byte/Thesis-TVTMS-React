@@ -70,7 +70,7 @@ function public_dispute(array $params=[]): never
         fail('A valid ticket number, plate number, and a reason of 10–4000 characters are required.',400,'VALIDATION_ERROR');
     }
     // Server-side correlation only. Never log the motorist's ticket, plate or reason.
-    $requestId=bin2hex(random_bytes(8));
+    $requestId=(string)($GLOBALS['tvtms_public_dispute_request_id']??bin2hex(random_bytes(8)));
     header('X-Request-ID: '.$requestId);
     try{
         $r=supabase_rpc('tvtms_public_dispute_submit',['p_ticket'=>$ticket,'p_plate'=>$plate,'p_reason'=>$reason]);
