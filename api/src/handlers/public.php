@@ -69,21 +69,27 @@ function public_dispute(array $params=[]): never
     if($ticket===''||strlen($ticket)>30||$plate===''||strlen($plate)>30||$reasonLength===false||$reasonLength<10||$reasonLength>4000){
         fail('A valid ticket number, plate number, and a reason of 10–4000 characters are required.',400,'VALIDATION_ERROR');
     }
+    // Server-side correlation only. Never log the motorist's ticket, plate or reason.
+    $requestId=bin2hex(random_bytes(8));
+    header('X-Request-ID: '.$requestId);
     try{
         $r=supabase_rpc('tvtms_public_dispute_submit',['p_ticket'=>$ticket,'p_plate'=>$plate,'p_reason'=>$reason]);
     }catch(SupabaseException $e){
         if(in_array($e->pgCode,['PGRST202','42883'],true)){
-            error_log('TVTMS public dispute RPC is missing or its signature is unavailable. Review the pending public-dispute migration and schema cache.');
-            fail('Online dispute submission is not available yet. Please contact the issuing office.',503,'PUBLIC_DISPUTE_NOT_CONFIGURED');
+            error_log('TVTMS public dispute ['.$requestId.'] missing RPC; status='.$e->httpStatus.' pgCode='.preg_replace('/[^A-Za-z0-9]/','',(string)$e->pgCode));
+            fail('Online dispute submission is not available yet. Please contact the issuing office.',503,'PUBLIC_DISPUTE_NOT_CONFIGURED',['request_id'=>$requestId]);
         }
-        error_log('TVTMS public dispute database service is unavailable.');
-        fail('Online dispute submission is temporarily unavailable. Please try again later or contact the issuing office.',503,'PUBLIC_DISPUTE_UNAVAILABLE');
+        error_log('TVTMS public dispute ['.$requestId.'] database request failed; status='.$e->httpStatus.' pgCode='.preg_replace('/[^A-Za-z0-9]/','',(string)$e->pgCode));
+        fail('Online dispute submission is temporarily unavailable. Please try again later or contact the issuing office.',503,'PUBLIC_DISPUTE_UNAVAILABLE',['request_id'=>$requestId]);
     }catch(Throwable $e){
-        error_log('TVTMS public dispute service request failed.');
-        fail('Online dispute submission is temporarily unavailable. Please try again later or contact the issuing office.',503,'PUBLIC_DISPUTE_UNAVAILABLE');
+        error_log('TVTMS public dispute ['.$requestId.'] unexpected service error type='.get_class($e));
+        fail('Online dispute submission is temporarily unavailable. Please try again later or contact the issuing office.',503,'PUBLIC_DISPUTE_UNAVAILABLE',['request_id'=>$requestId]);
     }
     $err=rpc_domain_error($r);if($err)fail_domain($err);
-    if(!is_array($r)||(int)($r['disputeId']??0)<=0)fail('Online dispute submission is temporarily unavailable. Please contact the issuing office.',503,'PUBLIC_DISPUTE_UNAVAILABLE');
+    if(!is_array($r)||(int)($r['disputeId']??0)<=0){
+        error_log('TVTMS public dispute ['.$requestId.'] missing confirmed dispute ID in RPC response.');
+        fail('Online dispute submission is temporarily unavailable. Please contact the issuing office.',503,'PUBLIC_DISPUTE_UNAVAILABLE',['request_id'=>$requestId]);
+    }
     json_response(['success'=>true,'message'=>'Your dispute has been submitted for administrator review.','dispute_id'=>(int)($r['disputeId']??0)],201);
 }
 function public_violations(array $params=[]): never

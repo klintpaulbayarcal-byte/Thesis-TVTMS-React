@@ -175,7 +175,11 @@ function tickets_create(array $params=[]): never
     $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_create',['p_user_id'=>(int)$u['id'],'p_data'=>$data]));
     $ticket=$r['ticket']??null;if(!is_array($ticket))fail('Citation creation returned no record',500,'TICKET_CREATE_FAILED');
     // Only after the committed RPC returns: driver snapshot is checked before SMTP.
-    try{$notification=ticket_notification_attempt((int)$u['id'],$ticket,$data['driver_email']);}
+    try{
+        $notification=email_notification_setting_enabled('send_violation_notice')
+            ?ticket_notification_attempt((int)$u['id'],$ticket,$data['driver_email'])
+            :ticket_notification_result('disabled',null,false,'Citation issued. Automatic violation notice emails are disabled in Administrator settings.');
+    }
     catch(Throwable){
         error_log('Citation notification failed after persistence.');
         $notification=ticket_notification_result('unknown',null,false,'Citation issued, but email delivery is uncertain. Do not issue a duplicate citation.');
@@ -190,6 +194,9 @@ function tickets_retry_notification(array $params): never
     $confirmed=(($b['recipient_email_confirmed']??null)===true&&is_string($b['recipient_email']??$b['owner_email']??null))?normalize_email($b['recipient_email']??$b['owner_email']):'';
     if($confirmed===''||filter_var($confirmed,FILTER_VALIDATE_EMAIL)===false){
         fail('Confirm the intended email address before retrying this ticket notification.',409,'NOTIFICATION_RECIPIENT_REQUIRED');
+    }
+    if(!email_notification_setting_enabled('send_violation_notice')){
+        fail('Violation notice emails are disabled in Administrator settings.',409,'NOTIFICATION_DISABLED');
     }
     $notification=ticket_notification_attempt((int)$u['id'],['id'=>$id],$confirmed);
     $statusCode=(int)($notification['statusCode']??0);
