@@ -6,6 +6,18 @@ header('X-Frame-Options: DENY');
 header('Referrer-Policy: no-referrer');
 header("Permissions-Policy: geolocation=(self), camera=(self)");
 
+// Correlate the public-dispute request at PHP entry, before configuration,
+// rate-limiting, routing, or a Supabase call. Log no personal request data.
+// The presence of X-Request-ID can help distinguish a PHP-handled response
+// from a gateway failure that never reached the application.
+if(($_SERVER['REQUEST_METHOD']??'')==='POST'
+    &&preg_match('~^/api/public/dispute(?:[/?]|$)~',(string)($_SERVER['REQUEST_URI']??''))===1){
+    $disputeRequestId=bin2hex(random_bytes(8));
+    $GLOBALS['tvtms_public_dispute_request_id']=$disputeRequestId;
+    header('X-Request-ID: '.$disputeRequestId);
+    error_log('TVTMS public dispute ['.$disputeRequestId.'] reached PHP entry.');
+}
+
 require_once __DIR__ . '/src/common.php';
 // Validate local safety before authentication, rate limiting, health or database I/O.
 app_config();
