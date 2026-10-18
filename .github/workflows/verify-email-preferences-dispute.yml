@@ -71,6 +71,47 @@ jobs:
           else
             echo "Unexpected status on invalid input. Server/gateway diagnostics still required."
           fi
+      - name: Verify Gmail SMTP repository secret formats (no email, no deployment)
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_SECURE: ${{ secrets.SMTP_SECURE }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM_EMAIL: ${{ secrets.SMTP_FROM_EMAIL }}
+          SMTP_FROM_NAME: ${{ secrets.SMTP_FROM_NAME }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os, re, sys
+          names=('SMTP_HOST','SMTP_PORT','SMTP_SECURE','SMTP_USERNAME','SMTP_PASSWORD','SMTP_FROM_EMAIL','SMTP_FROM_NAME')
+          s={name:os.environ.get(name,'') for name in names}
+          problems=[]
+          for name in names:
+              if not s[name].strip():
+                  problems.append(name+' is missing')
+          if s['SMTP_HOST'].strip().lower()!='smtp.gmail.com':
+              problems.append('SMTP_HOST must be smtp.gmail.com')
+          if s['SMTP_PORT'].strip()!='587':
+              problems.append('SMTP_PORT must be 587')
+          if s['SMTP_SECURE'].strip().lower()!='tls':
+              problems.append('SMTP_SECURE must be tls')
+          user=s['SMTP_USERNAME'].strip().lower()
+          sender=s['SMTP_FROM_EMAIL'].strip().lower()
+          if not re.fullmatch(r'[a-zA-Z0-9.!#$%&*+/=?^_`{|}~-]+@[a-zA-Z0-9.-]+',user):
+              problems.append('SMTP_USERNAME is not shaped like an email address')
+          if not user.endswith('@gmail.com'):
+              problems.append('SMTP_USERNAME must use the intended personal Gmail account')
+          if sender!=user:
+              problems.append('SMTP_FROM_EMAIL must match SMTP_USERNAME for Gmail')
+          if len(s['SMTP_PASSWORD'])!=16 or not s['SMTP_PASSWORD'].isascii() or not s['SMTP_PASSWORD'].isalnum():
+              problems.append('SMTP_PASSWORD must be a 16-character Google App Password without spaces')
+          for problem in problems:
+              print('Configuration check:',problem)
+          if problems: sys.exit(1)
+          print('PASS: Repository Gmail SMTP secret formats are consistent. No SMTP connection, email, or deployment was attempted.')
+          PY
       - name: Confirm PHP runtime
         run: |
           php -v
