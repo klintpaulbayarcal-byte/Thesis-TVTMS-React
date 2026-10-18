@@ -1,5 +1,6 @@
 import json
 import os
+import socket
 import socketserver
 import subprocess
 import threading
@@ -42,6 +43,10 @@ class FakeSmtpHandler(socketserver.StreamRequestHandler):
             if in_data:
                 if line == ".":
                     self.server.message = "\n".join(message)
+                    if self.server.drop_after_data:
+                        self.connection.shutdown(socket.SHUT_RDWR)
+                        self.connection.close()
+                        return
                     self.wfile.write(b"250 accepted\r\n")
                     in_data = False
                 else:
@@ -68,10 +73,11 @@ class FakeSmtpHandler(socketserver.StreamRequestHandler):
 
 
 class FakeSmtpServer:
-    def __init__(self, reject_recipient: bool = False):
+    def __init__(self, reject_recipient: bool = False, drop_after_data: bool = False):
         self.server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), FakeSmtpHandler)
         self.server.daemon_threads = True
         self.server.reject_recipient = reject_recipient
+        self.server.drop_after_data = drop_after_data
         self.server.message = ""
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 
@@ -156,5 +162,23 @@ def test_fake_smtp_rejection_is_safe_and_does_not_log_credentials_or_recipient()
     payload = json.loads(result.stdout)
     assert payload["status"] == "failed"
     assert payload["errorCode"] == "smtp_rejected"
+    assert payload["message"] == "Mail server rejected at recipient (SMTP 550)."
+    assert "recipient] reply_code=550" in result.stderr
+    assert "super-secret-test-password" not in payload["message"]
+    assert "private-owner@example.test" not in payload["message"]
     assert "super-secret-test-password" not in result.stderr
     assert "private-owner@example.test" not in result.stderr
+
+
+def test_disconnected_smtp_after_data_is_unknown_not_definite_failure():
+    # Server can receive the full DATA payload, then lose connection before
+    # confirming acceptance. Never offer an automatic duplicate retry.
+    with FakeSmtpServer(drop_after_data=True) as fake:
+        result = run_php(
+            f"$r=smtp_send_message_result({smtp_array(fake.port)},'owner@example.test','Traffic Violation Notice','<p>Ticket</p>');echo json_encode($r);"
+        )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "unknown"
+    assert payload["errorCode"] == "delivery_state_unknown"
+    assert "Ticket" in fake.message
