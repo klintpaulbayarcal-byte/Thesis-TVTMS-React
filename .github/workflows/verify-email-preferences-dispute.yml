@@ -27,6 +27,31 @@ jobs:
           cache: npm
       - name: Install locked frontend/test dependencies
         run: npm ci
+      - name: Assess direct and transitive npm advisories (report only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm audit --json > "$RUNNER_TEMP/tvtms-npm-audit.json" || true
+          python - "$RUNNER_TEMP/tvtms-npm-audit.json" <<'PY'
+          import json, sys
+          from pathlib import Path
+          report=json.loads(Path(sys.argv[1]).read_text())
+          print("npm audit summary:", report.get("metadata", {}).get("vulnerabilities", {}))
+          for name, item in sorted(report.get("vulnerabilities", {}).items()):
+              via=[v.get("name", "") + ":" + str(v.get("range", "")) for v in item.get("via", []) if isinstance(v,dict)]
+              print("package=%s severity=%s direct=%s range=%s via=%s fix=%s" % (
+                  name, item.get("severity"), item.get("isDirect"), item.get("range"),
+                  ",".join(via) or "transitive", bool(item.get("fixAvailable"))))
+          PY
+          npm audit --omit=dev --json > "$RUNNER_TEMP/tvtms-prod-audit.json" || true
+          python - "$RUNNER_TEMP/tvtms-prod-audit.json" <<'PY'
+          import json, sys
+          from pathlib import Path
+          report=json.loads(Path(sys.argv[1]).read_text())
+          print("npm audit production-dependency summary:", report.get("metadata", {}).get("vulnerabilities", {}))
+          for name, item in sorted(report.get("vulnerabilities", {}).items()):
+              print("production dependency advisory: %s (%s)" % (name,item.get("severity")))
+          PY
       - name: Confirm PHP runtime
         run: |
           php -v
