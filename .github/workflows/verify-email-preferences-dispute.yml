@@ -52,6 +52,25 @@ jobs:
           for name, item in sorted(report.get("vulnerabilities", {}).items()):
               print("production dependency advisory: %s (%s)" % (name,item.get("severity")))
           PY
+      - name: Probe live public dispute validation without creating a dispute
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Intentionally invalid request: empty fields, no ticket, plate, or reason.
+          # Server-side input validation must stop it before any dispute RPC.
+          # Perform exactly one probe and print only its HTTP status.
+          status="$(curl --silent --show-error --max-time 20 --retry 0 \
+            --header 'Content-Type: application/json' \
+            --request POST --data '{}' \
+            --output "$RUNNER_TEMP/tvtms-dispute-probe.txt" \
+            --write-out '%{http_code}' \
+            'https://trafficviolation.dcsbisu.com/api/public/dispute')"
+          echo "Production invalid-dispute validation HTTP status: $status"
+          if [ "$status" = 400 ]; then
+            echo "PHP dispute validation can respond; no real dispute was submitted."
+          else
+            echo "Unexpected status on invalid input. Server/gateway diagnostics still required."
+          fi
       - name: Confirm PHP runtime
         run: |
           php -v
