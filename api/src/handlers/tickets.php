@@ -255,9 +255,17 @@ function tickets_permanent_delete(array $params): never
             fail('This ticket has protected payment, dispute, evidence, or email notification history. Cancel it or retain it for the audit trail instead.',409,'LINKED_RECORDS_EXIST');
         }
     }
-    $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_mutate',['p_action'=>'delete','p_id'=>$id,'p_user_id'=>(int)$u['id'],'p_role'=>$u['role'],'p_data'=>['reason'=>$reason]]));$ticket=$r['ticket']??[];
-    log_audit((int)$u['id'],'TICKET_PERMANENTLY_DELETED','tickets',$id,['ticketNumber'=>$ticket['ticket_number']??null,'reason'=>$reason]);
-    ok('Ticket permanently deleted',['id'=>$id,'ticketNumber'=>$ticket['ticket_number']??null]);
+    $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_admin_delete',[
+        'p_ticket_id'=>$id,
+        'p_actor_id'=>(int)$u['id'],
+        'p_confirm_ticket_number'=>$confirmation,
+        'p_reason'=>$reason,
+        'p_ip'=>client_ip_for_audit(),
+        'p_user_agent'=>substr((string)($_SERVER['HTTP_USER_AGENT']??''),0,2000),
+    ]));
+    // The database records the deletion and its audit entry atomically.
+    // Do not make a second, best-effort audit insert after the deletion.
+    ok('Ticket permanently deleted',['id'=>$id,'ticketNumber'=>$r['ticketNumber']??null,'auditId'=>$r['auditId']??null]);
 }
 
 function tickets_mark_unpaid(array $params): never
