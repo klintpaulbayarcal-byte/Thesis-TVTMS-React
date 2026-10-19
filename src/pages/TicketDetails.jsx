@@ -212,7 +212,7 @@ export default function TicketDetails() {
   if (!ticket) return <><PageHeader title="Citation Details"/><Notice type="error">{notice.text || 'Ticket could not be loaded.'}</Notice></>;
 
   const penalty = ticket.penalty_amount_at_issue ?? ticket.penalty_amount;
-  const canEdit = ticket.status !== 'cancelled';
+  const canEdit = ticket.status === 'unpaid';
   const canRecordPayment = isAdmin && ticket.status !== 'cancelled' && Number(ticket.remaining_balance ?? penalty ?? 0) > 0;
   const notification = ticket.notification ?? {};
 
@@ -228,7 +228,7 @@ export default function TicketDetails() {
     <PageHeader
       title="Citation Details"
       subtitle={`Complete citation record for ${ticket.ticket_number}.`}
-      actions={<div className="header-actions"><button className="btn btn-primary btn-sm no-print" onClick={()=>window.print()}>Print Ticket</button><button className="btn btn-secondary btn-sm no-print" onClick={()=>navigate(isAdmin?'/admin/tickets':'/officer/tickets')}>← Back to Tickets</button>{canEdit&&<button className="btn btn-secondary btn-sm no-print" onClick={()=>setEditOpen(true)}>Edit Details</button>}{isAdmin&&ticket.status!=='cancelled'&&<button className="btn btn-danger btn-sm no-print" onClick={()=>startAction('cancel')}>Cancel Ticket</button>}</div>}
+      actions={<div className="header-actions"><button className="btn btn-primary btn-sm no-print" onClick={()=>window.print()}>Print Ticket</button><button className="btn btn-secondary btn-sm no-print" onClick={()=>navigate(isAdmin?'/admin/tickets':'/officer/tickets')}>← Back to Tickets</button>{canEdit&&<button className="btn btn-secondary btn-sm no-print" onClick={()=>setEditOpen(true)}>Edit Details</button>}{isAdmin&&ticket.status==='unpaid'&&<button className="btn btn-danger btn-sm no-print" onClick={()=>startAction('cancel')}>Cancel Ticket</button>}</div>}
     />
     <Notice type={notice.type} onClose={()=>setNotice({type:'',text:''})}>{notice.text}</Notice>
 
