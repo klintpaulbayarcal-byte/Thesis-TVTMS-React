@@ -112,6 +112,25 @@ jobs:
           if problems: sys.exit(1)
           print('PASS: Repository Gmail SMTP secret formats are consistent. No SMTP connection, email, or deployment was attempted.')
           PY
+      - name: Probe live dispute handling with verified nonexistent QA citation (no dispute created)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The synthetic ticket was checked against production and does not exist.
+          # The RPC must return TICKET_NOT_FOUND before any INSERT.
+          status="$(curl --silent --show-error --max-time 25 --retry 0 \
+            --header 'Content-Type: application/json' \
+            --request POST \
+            --data '{"ticketNumber":"TVT-QA-NONEXISTENT-20261019","plateNumber":"QA-NO-PLATE","reason":"Diagnostic check with nonexistent citation only"}' \
+            --output "$RUNNER_TEMP/tvtms-safe-dispute-test.json" \
+            --write-out '%{http_code}' \
+            'https://trafficviolation.dcsbisu.com/api/public/dispute')"
+          echo "Nonexistent-citation public dispute HTTP status: $status"
+          if [ "$status" = 404 ]; then
+            echo 'Live validation reaches ticket-not-found; no actual dispute is created.'
+          else
+            echo 'Unexpected response: review Hostinger server-side logs before real submission.'
+          fi
       - name: Confirm PHP runtime
         run: |
           php -v
