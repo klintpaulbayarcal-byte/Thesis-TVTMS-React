@@ -18,8 +18,13 @@ def test_admin_only_deletion_and_audited_reason():
     assert "strlen($reason)<5" in block
     assert "confirm_ticket_number" in block
     assert "hash_equals" in block
-    assert "TICKET_PERMANENTLY_DELETED" in block
-    assert "log_audit" in block
+    assert "tvtms_ticket_admin_delete" in block
+    assert "log_audit" not in block
+    migration = src("supabase/migrations/202610190001_atomic_admin_ticket_delete.sql")
+    assert "TICKET_PERMANENTLY_DELETED" in migration
+    assert "INSERT INTO public.audit_logs" in migration
+    assert "DELETE FROM public.tickets" in migration
+    assert "GRANT EXECUTE ON FUNCTION public.tvtms_ticket_admin_delete" in migration
 
 
 def test_linked_records_block_deletion():
