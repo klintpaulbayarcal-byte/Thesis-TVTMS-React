@@ -212,7 +212,8 @@ function ticket_notification_read(array $ticket): array
         'sending'=>'A ticket notification attempt is in progress.',
         'unknown'=>'The delivery result is uncertain; retry is disabled to prevent duplicates.',
     ];
-    return ticket_notification_result($status,$masked,$status==='failed',$messages[$status]??'No notification result is available.',[
+    $cancelled=($ticket['status']??'')==='cancelled';
+    return ticket_notification_result($status,$masked,$status==='failed'&&!$cancelled,$cancelled?'Citation cancelled. No further violation notice can be sent.':($messages[$status]??'No notification result is available.'),[
         'attemptCount'=>(int)($row['attempt_count']??0),
         'acceptedAt'=>$row['accepted_at']??null,
         'lastAttemptAt'=>$row['last_attempt_at']??null,
