@@ -195,6 +195,10 @@ function tickets_retry_notification(array $params): never
     if($confirmed===''||filter_var($confirmed,FILTER_VALIDATE_EMAIL)===false){
         fail('Confirm the intended email address before retrying this ticket notification.',409,'NOTIFICATION_RECIPIENT_REQUIRED');
     }
+    $rows=supabase_select('tickets',['id'=>'eq.'.$id],['select'=>'id,status,user_id','limit'=>1]);
+    if(!$rows)fail('Ticket not found.',404,'TICKET_NOT_FOUND');
+    if($u['role']==='apprehending_officer'&&(int)$rows[0]['user_id']!==(int)$u['id'])fail('Access denied.',403,'TICKET_ACCESS_DENIED');
+    if(($rows[0]['status']??'')==='cancelled')fail('Cancelled citations cannot receive a new violation notice.',409,'TICKET_CANCELLED');
     if(!email_notification_setting_enabled('send_violation_notice')){
         fail('Violation notice emails are disabled in Administrator settings.',409,'NOTIFICATION_DISABLED');
     }
