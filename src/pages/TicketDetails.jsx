@@ -29,6 +29,7 @@ export default function TicketDetails() {
   const [actionOpen, setActionOpen] = useState(false);
   const [actionType, setActionType] = useState('');
   const [actionReason, setActionReason] = useState('');
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [busy, setBusy] = useState(false);
   const [notificationBusy, setNotificationBusy] = useState(false);
   const qrCanvas = useRef(null);
@@ -131,6 +132,7 @@ export default function TicketDetails() {
   const startAction = type => {
     setActionType(type);
     setActionReason('');
+    setDeleteConfirmation('');
     setActionOpen(true);
   };
 
@@ -139,13 +141,17 @@ export default function TicketDetails() {
       setNotice({ type: 'error', text: 'Please provide a reason with at least 5 characters.' });
       return;
     }
+    if (actionType === 'delete' && deleteConfirmation !== ticket?.ticket_number) {
+      setNotice({type:'error',text:'Type the exact citation number before deleting.'});
+      return;
+    }
     if (busy) return;
     setBusy(true);
     try {
       if (actionType === 'cancel') await API.cancelTicket(id, actionReason.trim());
       if (actionType === 'unpaid') await API.markUnpaid(id, actionReason.trim());
       if (actionType === 'delete') {
-        await API.permanentDeleteTicket(id, actionReason.trim());
+        await API.permanentDeleteTicket(id, actionReason.trim(), deleteConfirmation);
         navigate('/admin/tickets', { replace: true });
         return;
       }
@@ -223,6 +229,7 @@ export default function TicketDetails() {
   const canEdit = ticket.status === 'unpaid';
   const canRecordPayment = isAdmin && ticket.status !== 'cancelled' && Number(ticket.remaining_balance ?? penalty ?? 0) > 0;
   const notification = ticket.notification ?? {};
+  const canDelete = isAdmin && ['unpaid','cancelled'].includes(ticket.status) && payments.length === 0 && evidence.length === 0 && notification.status === 'not_recorded' && !ticket.has_dispute;
 
   const timelineColumns = [
     { key: 'created_at', label: 'Date', render: row => dateTime(row.created_at) },
@@ -264,7 +271,7 @@ export default function TicketDetails() {
       ].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'Not recorded'}</dd></div>)}</div><p>The seven-day appearance deadline is separate from the payment and dispute deadlines.</p></section>}
       <div className="ticket-financial-strip"><div><span>Total Citation Penalty</span><strong>{money(penalty)}</strong></div><div><span>Total Paid</span><strong className="paid-value">{money(ticket.total_paid)}</strong></div><div><span>Remaining Balance</span><strong className="balance-value">{money(ticket.remaining_balance)}</strong></div></div>
 
-      {isAdmin&&<div className="ticket-admin-actions">{ticket.status==='paid'&&<button className="btn btn-secondary" onClick={()=>startAction('unpaid')}>Mark Unpaid</button>}<button className="btn btn-ghost danger-link" onClick={()=>startAction('delete')}>Permanent Delete</button></div>}
+      {isAdmin&&<div className="ticket-admin-actions">{ticket.status==='paid'&&<button className="btn btn-secondary" onClick={()=>startAction('unpaid')}>Mark Unpaid</button>}<button className="btn btn-ghost danger-link" disabled={!canDelete} title={canDelete?'Permanently delete eligible citation':'Deletion is restricted to unpaid or cancelled citations with no linked payment, dispute, evidence or email records.'} onClick={()=>startAction('delete')}>Permanent Delete</button></div>}
     </section>
 
     <section className="card no-print">
@@ -324,9 +331,10 @@ export default function TicketDetails() {
       </div>
     </Modal>
 
-    <Modal open={actionOpen} title={actionType==='cancel'?'Cancel Ticket':actionType==='unpaid'?'Mark Ticket Unpaid':'Permanently Delete Ticket'} onClose={()=>setActionOpen(false)} footer={<><button className="btn btn-secondary" onClick={()=>setActionOpen(false)}>Back</button><button className="btn btn-danger" disabled={busy} onClick={performAdminAction}>{busy?'Working…':actionType==='delete'?'Delete Permanently':'Confirm'}</button></>}>
-      <Notice type="error">{actionType==='delete'?'This permanently removes the ticket and its dependent records. Use only for an authorized administrative correction.':''}</Notice>
+    <Modal open={actionOpen} title={actionType==='cancel'?'Cancel Ticket':actionType==='unpaid'?'Mark Ticket Unpaid':'Permanently Delete Ticket'} onClose={()=>setActionOpen(false)} footer={<><button className="btn btn-secondary" onClick={()=>setActionOpen(false)}>Back</button><button className="btn btn-danger" disabled={busy || (actionType==='delete' && deleteConfirmation!==ticket.ticket_number)} onClick={performAdminAction}>{busy?'Working…':actionType==='delete'?'Delete Permanently':'Confirm'}</button></>}>
+      <Notice type="error">{actionType==='delete'?'Only eligible test or mistaken citations without protected payment, dispute, evidence or email history can be deleted. This cannot be undone.':''}</Notice>
       <label className="field"><span>Reason *</span><textarea rows="4" minLength="5" maxLength="500" value={actionReason} onChange={e=>setActionReason(e.target.value)} placeholder="Enter the reason for this administrative action."/></label>
+      {actionType==='delete'&&<label className="field"><span>Confirm citation number: {ticket.ticket_number}</span><input autoComplete="off" value={deleteConfirmation} onChange={event=>setDeleteConfirmation(event.target.value)} placeholder={ticket.ticket_number}/></label>}
     </Modal>
   </div>;
 }
