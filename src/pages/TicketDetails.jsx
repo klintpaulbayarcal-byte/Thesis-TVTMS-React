@@ -86,6 +86,12 @@ export default function TicketDetails() {
       setNotice({ type: 'error', text: 'Amount and official receipt number are required.' });
       return;
     }
+    if (busy) return;
+    const amount = Number(payment.amount_paid);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > Number(ticket?.remaining_balance ?? 0)) {
+      setNotice({ type: 'error', text: 'Enter a valid amount within the remaining balance.' });
+      return;
+    }
     setBusy(true);
     try {
       await API.recordPayment({
@@ -98,8 +104,8 @@ export default function TicketDetails() {
       });
       setPaymentOpen(false);
       setPayment({ amount_paid: '', official_receipt_number: '', payment_method: 'cash', payment_date: today(), notes: '' });
-      setNotice({ type: 'success', text: 'Payment recorded successfully.' });
       await load();
+      setNotice({ type: 'success', text: 'Payment recorded successfully.' });
     } catch (error) {
       setNotice({ type: 'error', text: error.message });
     } finally {
@@ -108,6 +114,7 @@ export default function TicketDetails() {
   };
 
   const saveDetails = async () => {
+    if (busy) return;
     setBusy(true);
     try {
       await API.updateTicketDetails(id, { location: edit.location.trim(), remarks: edit.remarks.trim() });
@@ -132,6 +139,7 @@ export default function TicketDetails() {
       setNotice({ type: 'error', text: 'Please provide a reason with at least 5 characters.' });
       return;
     }
+    if (busy) return;
     setBusy(true);
     try {
       if (actionType === 'cancel') await API.cancelTicket(id, actionReason.trim());
@@ -299,7 +307,7 @@ export default function TicketDetails() {
       </section>
     </div>
 
-    <Modal open={paymentOpen} title="Record Payment" onClose={()=>setPaymentOpen(false)} footer={<><button className="btn btn-secondary" onClick={()=>setPaymentOpen(false)}>Cancel</button><button className="btn btn-primary" disabled={busy} onClick={recordPayment}>{busy?'Saving…':'Save Payment'}</button></>}>
+    <Modal open={paymentOpen} title="Record Payment" onClose={()=>setPaymentOpen(false)} footer={<><button className="btn btn-secondary" onClick={()=>setPaymentOpen(false)}>Cancel</button><button className="btn btn-primary" disabled={busy || !payment.official_receipt_number.trim() || !(Number(payment.amount_paid)>0)} onClick={recordPayment}>{busy?'Saving…':'Save Payment'}</button></>}>
       <div className="form-grid">
         <label className="field"><span>Amount *</span><input type="number" min="0.01" step="0.01" value={payment.amount_paid} onChange={e=>setPayment({...payment,amount_paid:e.target.value})}/></label>
         <label className="field"><span>Official receipt no. *</span><input value={payment.official_receipt_number} onChange={e=>setPayment({...payment,official_receipt_number:e.target.value})}/></label>
