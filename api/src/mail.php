@@ -5,12 +5,14 @@ final class MailTransportException extends RuntimeException
 {
     public string $errorCode;
     public string $stage;
+    public ?int $replyCode;
 
-    public function __construct(string $errorCode,string $stage)
+    public function __construct(string $errorCode,string $stage,?int $replyCode=null)
     {
         parent::__construct($errorCode);
         $this->errorCode=$errorCode;
         $this->stage=$stage;
+        $this->replyCode=$replyCode;
     }
 }
 
@@ -59,7 +61,11 @@ function smtp_expect($socket,array $codes,string $stage): string
 {
     $response=smtp_read_response($socket,$stage);
     $code=(int)substr($response,0,3);
-    if(!in_array($code,$codes,true))throw new MailTransportException('smtp_rejected',$stage);
+    if(!in_array($code,$codes,true)){
+        // The server text can contain email addresses or diagnostic tokens.
+        // Keep only its three-digit SMTP code; never persist/log the raw reply.
+        throw new MailTransportException('smtp_rejected',$stage,$code>=100&&$code<=599?$code:null);
+    }
     return $response;
 }
 
@@ -156,8 +162,21 @@ function smtp_send_message_result(array $smtp,string $to,string $subject,string 
         fclose($socket);
         return mail_result('accepted',null,'The mail server accepted the message.');
     }catch(MailTransportException $e){
-        error_log('SMTP send failed ['.$e->errorCode.':'.$e->stage.'].');
+        // Only fixed protocol step names and the numeric SMTP reply code are logged.
+        // Never include response text, recipients, credentials or message contents.
+        error_log('SMTP send failed ['.$e->errorCode.':'.$e->stage.'] reply_code='.($e->replyCode??'none').'.');
         if(is_resource($socket))fclose($socket);
+        // After sending DATA, losing the acceptance response does NOT prove failure.
+        // Leave the ticket ledger claimed so its existing timeout/unknown guard
+        // prevents a second message from being sent automatically.
+        if($e->errorCode==='transport_error'&&in_array($e->stage,['message_data','message_acceptance'],true)){
+            return mail_result('unknown','delivery_state_unknown','SMTP acceptance could not be confirmed. Do not retry this notification automatically.');
+        }
+        if($e->errorCode==='smtp_rejected'){
+            $stage=preg_replace('/[^a-z_]/','',$e->stage)?:'unknown';
+            $reply=$e->replyCode!==null?' (SMTP '.$e->replyCode.')':'';
+            return mail_result('failed','smtp_rejected','Mail server rejected at '.$stage.$reply.'.');
+        }
         return mail_result('failed',$e->errorCode,'The mail server did not accept the message.');
     }catch(Throwable){
         error_log('SMTP send failed [transport_error:unexpected].');
