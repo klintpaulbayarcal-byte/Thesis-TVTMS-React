@@ -242,8 +242,19 @@ function tickets_cancel(array $params): never
 
 function tickets_permanent_delete(array $params): never
 {
-    $u=require_role(['admin']);$id=ticket_valid_id($params['id']??0);$reason=clean_string(json_input()['reason']??'',500);
+    $u=require_role(['admin']);$id=ticket_valid_id($params['id']??0);$body=json_input();$reason=clean_string($body['reason']??'',500);
     if(strlen($reason)<5)fail('A deletion reason between 5 and 500 characters is required',400,'VALIDATION_ERROR');
+    $ticketRows=supabase_select('tickets',['id'=>'eq.'.$id],['select'=>'id,ticket_number,status','limit'=>1]);
+    if(!$ticketRows)fail('Ticket not found',404,'TICKET_NOT_FOUND');
+    $record=$ticketRows[0];
+    $confirmation=trim((string)($body['confirm_ticket_number']??''));
+    if($confirmation===''||!hash_equals((string)$record['ticket_number'],$confirmation))fail('Type the exact citation number to confirm permanent deletion.',409,'DELETE_CONFIRMATION_REQUIRED');
+    if(!in_array((string)$record['status'],['unpaid','cancelled'],true))fail('Only unpaid or cancelled tickets may be deleted.',409,'TICKET_DELETE_NOT_ALLOWED');
+    foreach(['payments','disputes','evidence','ticket_email_notifications'] as $related){
+        if(supabase_select($related,['ticket_id'=>'eq.'.$id],['select'=>'id','limit'=>1])){
+            fail('This ticket has protected payment, dispute, evidence, or email notification history. Cancel it or retain it for the audit trail instead.',409,'LINKED_RECORDS_EXIST');
+        }
+    }
     $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_mutate',['p_action'=>'delete','p_id'=>$id,'p_user_id'=>(int)$u['id'],'p_role'=>$u['role'],'p_data'=>['reason'=>$reason]]));$ticket=$r['ticket']??[];
     log_audit((int)$u['id'],'TICKET_PERMANENTLY_DELETED','tickets',$id,['ticketNumber'=>$ticket['ticket_number']??null,'reason'=>$reason]);
     ok('Ticket permanently deleted',['id'=>$id,'ticketNumber'=>$ticket['ticket_number']??null]);
