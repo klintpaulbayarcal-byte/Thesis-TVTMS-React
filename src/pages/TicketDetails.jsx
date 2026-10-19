@@ -219,9 +219,9 @@ export default function TicketDetails() {
 
   const penalty = ticket.penalty_amount_at_issue ?? ticket.penalty_amount;
   const canEdit = ticket.status === 'unpaid';
-  const canDelete = isAdmin && ['unpaid', 'cancelled'].includes(ticket.status) && payments.length === 0 && evidence.length === 0 && notification.status === 'not_recorded' && !ticket.has_dispute;
   const canRecordPayment = isAdmin && ticket.status !== 'cancelled' && Number(ticket.remaining_balance ?? penalty ?? 0) > 0;
   const notification = ticket.notification ?? {};
+  const canDelete = isAdmin && ['unpaid', 'cancelled'].includes(ticket.status) && payments.length === 0 && evidence.length === 0 && notification.status === 'not_recorded' && !ticket.has_dispute;
 
   const timelineColumns = [
     { key: 'created_at', label: 'Date', render: row => dateTime(row.created_at) },
