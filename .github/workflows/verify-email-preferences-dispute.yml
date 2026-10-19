@@ -131,6 +131,58 @@ jobs:
           else
             echo 'Unexpected response: review Hostinger server-side logs before real submission.'
           fi
+      - name: Controlled one-time QA dispute submission and SMTP inbox probe
+        env:
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          QA_SMTP_RECIPIENT: djklintskie@gmail.com
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, ssl, smtplib, urllib.request, urllib.error
+          from email.message import EmailMessage
+          url='https://trafficviolation.dcsbisu.com/api/public/dispute'
+          lookup='https://trafficviolation.dcsbisu.com/api/public/ticket-lookup?ticketNumber=TEST-QA-20261007-001'
+          with urllib.request.urlopen(lookup, timeout=20) as response:
+              result=json.load(response)
+          rows=result.get('tickets',[])
+          assert len(rows)==1 and rows[0].get('ticket_number')=='TEST-QA-20261007-001','Controlled QA citation unavailable'
+          eligible=rows[0].get('dispute_eligible') is True
+          print('QA citation dispute eligible:',eligible)
+          if eligible:
+              body={'ticketNumber':'TEST-QA-20261007-001','plateNumber':'QA1007T','reason':'CONTROLLED TVTMS QA TEST ONLY — authorized end-to-end public dispute verification before thesis final defense. Please close as test after verification.'}
+              req=urllib.request.Request(url,data=json.dumps(body).encode(),headers={'Content-Type':'application/json'},method='POST')
+              try:
+                  with urllib.request.urlopen(req,timeout=25) as response:
+                      code=response.status
+                      x=json.load(response)
+                  print('QA dispute HTTP status:',code)
+                  print('Confirmed dispute ID:',int(x.get('dispute_id') or 0))
+                  assert code==201 and int(x.get('dispute_id') or 0)>0,'Dispute creation unconfirmed; do NOT retry automatically'
+              except urllib.error.HTTPError as e:
+                  print('QA dispute returned HTTP:',e.code,'Do not retry automatically.')
+              except Exception as e:
+                  print('QA dispute response uncertain:',type(e).__name__,'Do not retry automatically.')
+          else:
+              print('QA dispute not eligible; no submission attempted.')
+          # One test message with unique subject, no driver/citation personal data.
+          msg=EmailMessage()
+          msg['From']=os.environ['SMTP_USERNAME']
+          msg['To']=os.environ['QA_SMTP_RECIPIENT']
+          msg['Subject']='TVTMS E2E SMTP Inbox Check 2026-10-20 QA ONLY'
+          msg.set_content('Controlled SMTP inbox delivery check for thesis QA. No traffic citation or police records were changed by this email.')
+          try:
+              with smtplib.SMTP('smtp.gmail.com',587,timeout=15) as conn:
+                  conn.ehlo()
+                  conn.starttls(context=ssl.create_default_context())
+                  conn.ehlo()
+                  conn.login(os.environ['SMTP_USERNAME'],os.environ['SMTP_PASSWORD'])
+                  conn.send_message(msg)
+              print('SMTP server accepted single QA test email (inbox delivery must be checked separately).')
+          except Exception as e:
+              print('SMTP check failed/uncertain:',type(e).__name__,'Do not retry automatically.')
+          PY
       - name: Confirm PHP runtime
         run: |
           php -v
