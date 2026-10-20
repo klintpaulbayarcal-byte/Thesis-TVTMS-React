@@ -37,7 +37,12 @@ test('unpaid with failed email and cancelled with accepted email are protected',
  assert.equal(error(await rpc([93104,93101,'QA-CANCELLED-DISPUTED','Admin QA cleanup'])),'LINKED_RECORDS_EXIST');
 });
 test('cancelled failed-email citation deletion is atomic and archived',async()=>{
- const result=await rpc([93101,93101,'QA-CANCELLED-FAILED','Admin QA cleanup']);
+ // Exercise the same invoker privileges as PHP/PostgREST, rather than silently
+ // relying on the database-owner privileges used to set up these fixtures.
+ let result;
+ await db.exec('set role service_role');
+ try{result=await rpc([93101,93101,'QA-CANCELLED-FAILED','Admin QA cleanup']);}
+ finally{await db.exec('reset role');}
  assert.equal(error(result),undefined);
  assert.ok(Number(result.authorizationAuditId)>0);
  assert.equal(result.archivedFailedEmails,1);
