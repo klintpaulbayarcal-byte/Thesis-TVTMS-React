@@ -11,10 +11,16 @@ import { firstArray, money, dateOnly, manilaDateKey } from '../utils/format';
 const blankPayment=()=>({amount_paid:'',official_receipt_number:'',payment_method:'cash',payment_date:manilaDateKey(),notes:''});
 export default function Payments(){
   const [tickets,setTickets]=useState([]);const [selected,setSelected]=useState(null);const [payments,setPayments]=useState([]);const [notice,setNotice]=useState({type:'',text:''});const [open,setOpen]=useState(false);const [saving,setSaving]=useState(false);const [form,setForm]=useState(blankPayment());
-  const [modalError,setModalError]=useState('');const savingRef=useRef(false);
+  const [modalError,setModalError]=useState('');const savingRef=useRef(false);const selectionVersion=useRef(0);
   const load=()=>API.tickets({status:'unpaid',pageSize:100}).then(response=>setTickets(firstArray(response,['tickets'])));
   useEffect(()=>{load().catch(error=>setNotice({type:'error',text:error.message}));},[]);
-  const select=async row=>{setSelected(row);try{const response=await API.paymentsForTicket(row.id);setPayments(firstArray(response,['payments']));}catch(error){setNotice({type:'error',text:error.message});}};
+  const select=async row=>{
+    if(savingRef.current)return;
+    const version=++selectionVersion.current;
+    setSelected(row);setPayments([]);setForm(blankPayment());setModalError('');setOpen(false);
+    try{const response=await API.paymentsForTicket(row.id);if(version===selectionVersion.current)setPayments(firstArray(response,['payments']));}
+    catch(error){if(version===selectionVersion.current)setNotice({type:'error',text:error.message});}
+  };
   const record=async()=>{
     if(saving||savingRef.current||!selected)return;
     setModalError('');

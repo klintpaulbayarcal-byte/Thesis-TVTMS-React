@@ -25,7 +25,7 @@ function component(name, API) {
     if(id==='react')return react;
     if(id==='react/jsx-runtime')return require(id);
     if(id.endsWith('/services/api'))return {API};
-    if(id.endsWith('/utils/format'))return {firstArray:r=>r.violations||r.disputes||r.payments||r.data||[],money:String,dateTime:String,manilaDateKey:()=> '2026-10-20'};
+    if(id.endsWith('/utils/format'))return {firstArray:r=>r.violations||r.disputes||r.payments||r.users||r.data||[],money:String,dateTime:String,manilaDateKey:()=> '2026-10-20'};
     return {__esModule:true,default:named(id.split('/').pop())};
   };
   vm.runInNewContext(js,{require:imports,module:mod,exports:mod.exports,confirm:()=>true});
@@ -125,4 +125,47 @@ test('payment dialog permits only one in-flight posting before rerender',async()
   const save=button(render(),'Save Payment').props.onClick;
   const first=save();const second=save();assert.equal(writes,1);
   release({success:true});await Promise.all([first,second]);
+});
+
+test('payment selection ignores late history and clears the previous ticket history',async()=>{
+  const pending=new Map();
+  const render=component('Payments',{paymentsForTicket:id=>new Promise(resolve=>pending.set(id,resolve))});
+  const select=row=>type(render(),'DataTable')[0].props.onRowClick(row);
+  const first=select({id:100,ticket_number:'QA-A',remaining_balance:10});
+  const second=select({id:101,ticket_number:'QA-B',remaining_balance:20});
+  pending.get(101)({payments:[{official_receipt_number:'QA-B-OR'}]});await second;
+  pending.get(100)({payments:[{official_receipt_number:'QA-A-OR'}]});await first;
+  assert.deepEqual(type(render(),'DataTable')[1].props.rows.map(r=>r.official_receipt_number),['QA-B-OR']);
+  const third=select({id:102,ticket_number:'QA-C',remaining_balance:30});
+  assert.equal(type(render(),'DataTable')[1].props.rows.length,0);
+  pending.get(102)({payments:[]});await third;
+});
+
+test('payment selection is locked while a posting is awaiting confirmation',async()=>{
+  let release;
+  const render=await paymentForm({recordPayment:()=>new Promise(resolve=>{release=resolve;}),
+    ticket:async()=>({ticket:{id:100,ticket_number:'QA-ONLY',remaining_balance:5}}),tickets:async()=>({data:[]})});
+  const posting=button(render(),'Save Payment').props.onClick();
+  await type(render(),'DataTable')[0].props.onRowClick({id:101,ticket_number:'QA-B',remaining_balance:20});
+  assert.match(type(render(),'Modal')[0].props.title,/QA-ONLY/);
+  release({success:true});await posting;
+});
+
+test('account creation rejects overlapping saves and shows write errors in its modal',async()=>{
+  let writes=0,reject;
+  const render=component('ManageUsers',{createUser:()=>{writes++;return new Promise((resolve,r)=>{reject=r;});}});
+  button(render(),' Add New User').props.onClick();
+  const save=button(render(),'Save Account').props.onClick;
+  const first=save();const second=save();
+  assert.equal(writes,1);
+  reject(Error('QA duplicate email'));await Promise.all([first,second]);
+  const modal=type(render(),'Modal')[0];assert.equal(modal.props.open,true);
+  assert.ok(type(modal,'Notice').some(n=>text(n)==='QA duplicate email'));
+});
+
+test('account save confirmation survives list refresh failure',async()=>{
+  const render=component('ManageUsers',{createUser:async()=>({success:true}),users:async()=>{throw Error('QA refresh offline');}});
+  button(render(),' Add New User').props.onClick();await button(render(),'Save Account').props.onClick();
+  assert.equal(type(render(),'Modal')[0].props.open,false);
+  const notice=type(render(),'Notice')[0];assert.equal(notice.props.type,'info');assert.match(text(notice),/saved.*refresh/i);
 });
