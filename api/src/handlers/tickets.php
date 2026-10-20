@@ -255,67 +255,31 @@ function tickets_permanent_delete(array $params): never
     $confirmed=trim((string)($body['confirm_ticket_number']??''));
     if($confirmed==='')fail('Type the exact citation number to confirm deletion.',409,'DELETE_CONFIRMATION_REQUIRED');
 
-    $matches=supabase_select('tickets',['id'=>'eq.'.$id],['select'=>'id,ticket_number,status','limit'=>1]);
-    if(!$matches)fail('Ticket not found.',404,'TICKET_NOT_FOUND');
-    $record=$matches[0];
-    if(!hash_equals((string)$record['ticket_number'],$confirmed)){
-        fail('The confirmation must exactly match the citation number.',409,'DELETE_CONFIRMATION_REQUIRED');
-    }
-    if(!in_array((string)$record['status'],['unpaid','cancelled'],true)){
-        fail('Only unpaid or cancelled citations may be permanently deleted.',409,'TICKET_DELETE_NOT_ALLOWED');
-    }
-
-    // Preserve permanent financial, dispute, evidentiary and notification records.
-    // Do not delete protected history to make the ticket appear eligible.
-    foreach(['payments','disputes','evidence','ticket_email_notifications'] as $table){
-        if(supabase_select($table,['ticket_id'=>'eq.'.$id],['select'=>'id','limit'=>1])){
-            fail('This citation has protected payment, dispute, evidence or email history. Keep or cancel the citation instead.',409,'LINKED_RECORDS_EXIST');
-        }
-    }
-
-    // Fail closed if the authorization audit cannot be persisted.
-    // This is a durable pre-mutation audit, NOT a single atomic deletion/audit RPC.
+    // Dedicated atomic RPC checks the active Administrator, exact ticket number,
+    // payment/dispute/evidence links, and failed-only email history for cancelled tickets.
+    // It preserves the ticket, email and history snapshots inside a durable audit record
+    // in the same transaction, before any deletion can take place.
     try{
-        $authorization=supabase_insert('audit_logs',[[
-            'user_id'=>(int)$u['id'],
-            'action'=>'TICKET_DELETE_AUTHORIZED',
-            'entity_type'=>'tickets',
-            'entity_id'=>$id,
-            'metadata'=>json_encode([
-                'ticketNumber'=>(string)$record['ticket_number'],
-                'reason'=>$reason,
-                'previousStatus'=>(string)$record['status'],
-                'event'=>'authorized_before_mutation',
-            ],JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE),
-            'ip_address'=>client_ip_for_audit(),
-            'user_agent'=>substr((string)($_SERVER['HTTP_USER_AGENT']??''),0,2000),
-        ]]);
-        $authorizationId=(int)($authorization[0]['id']??0);
-        if($authorizationId<=0)throw new RuntimeException('Audit confirmation missing');
-    }catch(Throwable){
-        error_log('Ticket deletion stopped: durable authorization audit was unavailable.');
-        fail('Deletion was stopped because its authorization audit could not be saved.',503,'DELETE_AUDIT_UNAVAILABLE');
+        $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_admin_safe_delete',[
+            'p_id'=>$id,
+            'p_user_id'=>(int)$u['id'],
+            'p_ticket_number'=>$confirmed,
+            'p_reason'=>$reason,
+        ]));
+    }catch(SupabaseException $e){
+        // Fail closed on an undeployed RPC; never fall back to a weaker delete.
+        error_log('Administrator atomic ticket deletion RPC unavailable.');
+        fail('Administrator deletion is temporarily unavailable. Please contact your system maintainer.',503,'DELETE_RPC_UNAVAILABLE');
     }
-
-    // Existing RPC rechecks role, status, and linked financial/dispute/evidence
-    // records while locking the ticket; it remains authoritative under concurrency.
-    $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_mutate',[
-        'p_action'=>'delete',
-        'p_id'=>$id,
-        'p_user_id'=>(int)$u['id'],
-        'p_role'=>$u['role'],
-        'p_data'=>['reason'=>$reason],
-    ]));
-    $ticket=$r['ticket']??[];
-    log_audit((int)$u['id'],'TICKET_PERMANENTLY_DELETED','tickets',$id,[
-        'ticketNumber'=>$ticket['ticket_number']??null,
-        'reason'=>$reason,
-        'authorizationAuditId'=>$authorizationId,
-    ]);
+    $auditId=(int)($r['authorizationAuditId']??0);
+    if($auditId<=0||($r['ticketNumber']??'')!==$confirmed){
+        fail('Deletion could not be verified. Refresh the ticket list before retrying.',503,'DELETE_CONFIRMATION_UNAVAILABLE');
+    }
     ok('Ticket permanently deleted',[
         'id'=>$id,
-        'ticketNumber'=>$ticket['ticket_number']??null,
-        'authorizationAuditId'=>$authorizationId,
+        'ticketNumber'=>$confirmed,
+        'authorizationAuditId'=>$auditId,
+        'archivedFailedEmails'=>(int)($r['archivedFailedEmails']??0),
     ]);
 }
 
