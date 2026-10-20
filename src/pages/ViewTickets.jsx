@@ -28,7 +28,8 @@ export default function ViewTickets(){
       <Link className="btn btn-secondary btn-sm" to={details} aria-label={`Manage citation ${row.ticket_number}`}>{admin?'Manage':'View'}</Link>
       {admin&&unpaid&&<Link className="btn btn-ghost btn-sm" to={`${details}?action=edit`} aria-label={`Edit citation ${row.ticket_number}`}>Edit</Link>}
       {admin&&unsettled&&<Link className="btn btn-ghost btn-sm" to={`${details}?action=cancel`} aria-label={`Cancel citation ${row.ticket_number}`}>Cancel</Link>}
-      {admin&&['unpaid','cancelled'].includes(row.status)&&effectivePaymentStatus(row)!=='partially_paid'&&<Link className="btn btn-ghost btn-sm" to={`${details}?action=delete`} aria-label={`Review deletion of citation ${row.ticket_number}`}>Delete</Link>}
+      {admin&&row.delete_eligible===true&&<Link className="btn btn-ghost btn-sm" to={`${details}?action=delete`} aria-label={`Review deletion of citation ${row.ticket_number}`}>Delete</Link>}
+      {admin&&row.delete_eligible!==true&&<span className="ticket-delete-restricted" role="note" title={row.delete_block_reason||'Deletion eligibility is unavailable. Use Manage to review.'} style={{fontSize:12,color:'var(--text-muted, #667085)',maxWidth:210}}>Delete restricted · {row.delete_block_reason||'Open Manage to review'}</span>}
     </div>;
   };
   const columns=[{key:'ticket_number',label:'Citation Number'},{key:'date_issued',label:'Date',render:row=>dateOnly(row.date_issued)},{key:'plate_number',label:'Vehicle'},{key:'owner_name',label:'Owner'},{key:'violation_name',label:'Violations',render:row=>row.violations?.map(v=>v.violation_name).join('; ')||row.violation_name},{key:'penalty_amount',label:'Penalty',render:row=>money(row.penalty_amount)},{key:'status',label:'Status',render:row=><StatusBadge value={effectivePaymentStatus(row)}/>} ,{key:'manage',label:'Actions',render:actionCell}];

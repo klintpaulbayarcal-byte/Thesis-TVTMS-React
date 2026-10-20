@@ -90,6 +90,42 @@ function tickets_list(array $params=[]): never
     ];
     $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_list',['p_filters'=>$filters]));
     $tickets=is_array($r['tickets']??null)?$r['tickets']:[];$tickets=ticket_enrich_payment_totals($tickets);$total=(int)($r['total']??0);
+    // Administrator list must not offer deletion when the protected record checks
+    // would reject it. Fail closed if any related-record lookup is unavailable.
+    if($u['role']==='admin'&&$tickets){
+        $ids=array_values(array_unique(array_filter(array_map(static fn($t)=>(int)($t['id']??0),$tickets))));
+        $protected=[];
+        $verified=false;
+        if($ids){
+            try{
+                $in='in.('.implode(',',$ids).')';
+                foreach(['payments','disputes','evidence','public_dispute_verifications'] as $table){
+                    foreach(supabase_select($table,['ticket_id'=>$in],['select'=>'ticket_id','limit'=>10000]) as $linked){
+                        $protected[(int)$linked['ticket_id']][]=$table;
+                    }
+                }
+                $emails=[];
+                foreach(supabase_select('ticket_email_notifications',['ticket_id'=>$in],['select'=>'ticket_id,status','limit'=>10000]) as $linked){
+                    $emails[(int)$linked['ticket_id']][]=(string)($linked['status']??'unknown');
+                }
+                $verified=true;
+            }catch(Throwable $e){
+                error_log('Ticket list deletion eligibility unavailable: '.get_class($e));
+            }
+        }
+        foreach($tickets as &$item){
+            $tid=(int)($item['id']??0);
+            $state=(string)($item['status']??'');
+            $reason=null;
+            if(!$verified)$reason='Deletion eligibility cannot be checked right now. Open Manage to review.';
+            elseif(!in_array($state,['unpaid','cancelled'],true))$reason='Only unpaid or cancelled citations can be deleted.';
+            elseif(!empty($protected[$tid]))$reason='Protected records: '.implode(', ',array_unique($protected[$tid])).'.';
+            elseif(!empty($emails[$tid])&&($state!=='cancelled'||count(array_filter($emails[$tid],static fn($status)=>$status!=='failed'))>0))$reason='Protected email delivery history exists.';
+            $item['delete_eligible']=$reason===null;
+            $item['delete_block_reason']=$reason;
+        }
+        unset($item);
+    }
     $pagination=['page'=>$page,'pageSize'=>$pageSize,'total'=>$total,'totalPages'=>max(1,(int)ceil($total/$pageSize))];
     ok('Tickets fetched successfully',$tickets,['tickets'=>$tickets,'pagination'=>$pagination]);
 }
