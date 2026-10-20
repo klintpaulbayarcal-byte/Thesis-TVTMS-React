@@ -8,7 +8,17 @@ function payment_valid_ymd(string $value): bool
 }
 function payments_record(array $params=[]): never
 {
-    $u=require_role(['admin']);$b=json_input();$ticketId=(int)($b['ticket_id']??0);$receipt=strtoupper(trim((string)($b['official_receipt_number']??$b['or_number']??'')));
+    $u=require_role(['admin']);$b=json_input();
+    // Validate JSON types before casts: true/nonempty arrays become 1 in PHP,
+    // and numeric-prefix strings can silently become a different payment.
+    $rawTicket=$b['ticket_id']??null;$rawAmount=$b['amount_paid']??null;
+    $rawReceipt=$b['official_receipt_number']??$b['or_number']??null;
+    if((!is_int($rawTicket)&&!is_string($rawTicket))
+        ||filter_var($rawTicket,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]])===false
+        ||(!is_int($rawAmount)&&!is_float($rawAmount)&&!is_string($rawAmount))
+        ||!is_numeric($rawAmount)||!is_finite((float)$rawAmount)||!is_string($rawReceipt))
+        fail('Valid ticket, numeric payment amount, and text official receipt number are required',400,'VALIDATION_ERROR');
+    $ticketId=(int)$rawTicket;$receipt=strtoupper(trim($rawReceipt));
     $amount=(float)($b['amount_paid']??0);$method=strtolower(trim((string)($b['payment_method']??'cash')));$notes=clean_string($b['notes']??'',2000);
     $date=array_key_exists('payment_date',$b)?$b['payment_date']:manila_today();
     if(!is_string($date)||!payment_valid_ymd($date))fail('A valid payment date in YYYY-MM-DD format is required',400,'INVALID_PAYMENT_DATE');
