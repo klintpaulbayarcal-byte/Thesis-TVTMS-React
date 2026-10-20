@@ -1,7 +1,7 @@
 import { printPublicTicketQr } from '../utils/printQr';
 import { effectivePaymentStatus } from '../utils/paymentStatus';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import QRCode from 'qrcode';
 import CitationViolations from '../components/CitationViolations';
 import { API } from '../services/api';
@@ -18,6 +18,7 @@ const today = manilaDateKey;
 export default function TicketDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { search } = useLocation();
   const { isAdmin } = useAuth();
   const [ticket, setTicket] = useState(null);
   const [payments, setPayments] = useState([]);
@@ -62,6 +63,41 @@ export default function TicketDetails() {
   };
 
   useEffect(() => { load(); }, [id]);
+
+  // Actions linked from All Tickets must still open the secure confirmation
+  // dialog. A URL never performs a mutation by itself.
+  useEffect(() => {
+    if (loading || !ticket || String(ticket.id)!==String(id) || !isAdmin) return;
+    const intent=new URLSearchParams(search).get('action');
+    if (!['edit','cancel','delete'].includes(intent)) return;
+    const notification=ticket.notification??{};
+    const effectiveStatus=effectivePaymentStatus(ticket);
+    const canReviewDelete=['unpaid','cancelled'].includes(ticket.status)
+      && effectiveStatus!=='partially_paid'
+      && payments.length===0 && evidence.length===0
+      && !ticket.has_dispute
+      && (notification.status==='not_recorded'||(ticket.status==='cancelled'&&notification.status==='failed'));
+    if (intent==='edit' && ticket.status==='unpaid') {
+      setEditOpen(true);
+    } else if (intent==='cancel' && effectiveStatus==='unpaid') {
+      setActionType('cancel');
+      setActionReason('');
+      setDeleteConfirmation('');
+      setActionError('');
+      setActionOpen(true);
+    } else if (intent==='delete' && canReviewDelete) {
+      setActionType('delete');
+      setActionReason('');
+      setDeleteConfirmation('');
+      setActionError('');
+      setActionOpen(true);
+    } else {
+      setNotice({type:'error',text:'This action is restricted for the selected citation. Review its status, payments, disputes, evidence and notification history.'});
+    }
+    // Clear the intent so refreshing the page cannot repeat the action.
+    navigate(`/tickets/${id}`,{replace:true});
+  }, [ticket,loading,id,search,isAdmin,payments,evidence,navigate]);
+
 
   const publicLookupUrl = ticket?.ticket_number
     ? `${window.location.origin}/ticket-lookup?ticket=${encodeURIComponent(ticket.ticket_number)}`
