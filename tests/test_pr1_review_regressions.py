@@ -12,6 +12,8 @@ def read(path):
 def test_ci_checks_pull_requests_without_requiring_packaged_user_uploads():
     workflow = read('.github/workflows/verify-hostinger-package.yml')
     assert 'pull_request:' in workflow
+    pr_trigger = workflow.split('pull_request:', 1)[1].split('push:', 1)[0]
+    assert '- sync-v4' in pr_trigger, 'Production-bound PRs must receive package verification before merge'
     assert 'test -f deploy/uploads/.htaccess' not in workflow
     assert 'test ! -e deploy/uploads' in workflow
     assert 'npm test' in workflow
