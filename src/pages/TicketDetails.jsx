@@ -30,6 +30,7 @@ export default function TicketDetails() {
   const [actionType, setActionType] = useState('');
   const [actionReason, setActionReason] = useState('');
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(false);
   const [notificationBusy, setNotificationBusy] = useState(false);
   const qrCanvas = useRef(null);
@@ -133,19 +134,21 @@ export default function TicketDetails() {
     setActionType(type);
     setActionReason('');
     setDeleteConfirmation('');
+    setActionError('');
     setActionOpen(true);
   };
 
   const performAdminAction = async () => {
     if (actionReason.trim().length < 5) {
-      setNotice({ type: 'error', text: 'Please provide a reason with at least 5 characters.' });
+      setActionError('Please provide a reason with at least 5 characters.');
       return;
     }
     if (actionType === 'delete' && deleteConfirmation !== ticket?.ticket_number) {
-      setNotice({type:'error',text:'Type the exact citation number before deleting.'});
+      setActionError('Type the exact citation number before deleting.');
       return;
     }
     if (busy) return;
+    setActionError('');
     setBusy(true);
     try {
       if (actionType === 'cancel') await API.cancelTicket(id, actionReason.trim());
@@ -159,7 +162,9 @@ export default function TicketDetails() {
       await load();
       setNotice({ type: 'success', text: actionType === 'cancel' ? 'Ticket cancelled.' : 'Ticket marked unpaid.' });
     } catch (error) {
-      setNotice({ type: 'error', text: error.message });
+      const detail = `${error.message || 'The server did not complete the request.'}${error.status ? ` (HTTP ${error.status})` : ''}${error.code && error.code !== 'API_ERROR' ? ` [${error.code}]` : ''}`;
+      setActionError(detail);
+      setNotice({ type: 'error', text: detail });
     } finally {
       setBusy(false);
     }
@@ -332,6 +337,7 @@ export default function TicketDetails() {
     </Modal>
 
     <Modal open={actionOpen} title={actionType==='cancel'?'Cancel Ticket':actionType==='unpaid'?'Mark Ticket Unpaid':'Permanently Delete Ticket'} onClose={()=>setActionOpen(false)} footer={<><button className="btn btn-secondary" onClick={()=>setActionOpen(false)}>Back</button><button className="btn btn-danger" disabled={busy || actionReason.trim().length < 5 || (actionType==='delete' && deleteConfirmation!==ticket.ticket_number)} onClick={performAdminAction}>{busy?'Working…':actionType==='delete'?'Delete Permanently':'Confirm'}</button></>}>
+      {actionError&&<Notice type="error">{actionError} — The citation has not been confirmed deleted. Refresh its status before trying again.</Notice>}
       {actionType==='delete'&&<Notice type="error">This permanently removes an eligible citation. Cancelled citations with failed email history are archived in the audit log first. Payment, dispute, evidence and delivered/uncertain email records remain protected. This cannot be undone.</Notice>}
       <label className="field"><span>Reason * (at least 5 characters)</span><textarea rows="4" minLength="5" maxLength="500" value={actionReason} onChange={e=>setActionReason(e.target.value)} placeholder="For example: Duplicate test citation" aria-describedby="admin-action-reason-help"/></label>
       <small id="admin-action-reason-help">{actionReason.trim().length < 5 ? 'Enter a reason of at least 5 characters to continue.' : 'Reason entered.'}</small>
