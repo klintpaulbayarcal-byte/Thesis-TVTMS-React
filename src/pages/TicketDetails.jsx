@@ -229,7 +229,7 @@ export default function TicketDetails() {
   const canEdit = ticket.status === 'unpaid';
   const canRecordPayment = isAdmin && ticket.status !== 'cancelled' && Number(ticket.remaining_balance ?? penalty ?? 0) > 0;
   const notification = ticket.notification ?? {};
-  const canDelete = isAdmin && ['unpaid','cancelled'].includes(ticket.status) && payments.length === 0 && evidence.length === 0 && notification.status === 'not_recorded' && !ticket.has_dispute;
+  const canDelete = isAdmin && ['unpaid','cancelled'].includes(ticket.status) && payments.length === 0 && evidence.length === 0 && !ticket.has_dispute && (notification.status === 'not_recorded' || (ticket.status === 'cancelled' && notification.status === 'failed'));
 
   const timelineColumns = [
     { key: 'created_at', label: 'Date', render: row => dateTime(row.created_at) },
@@ -271,7 +271,7 @@ export default function TicketDetails() {
       ].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'Not recorded'}</dd></div>)}</div><p>The seven-day appearance deadline is separate from the payment and dispute deadlines.</p></section>}
       <div className="ticket-financial-strip"><div><span>Total Citation Penalty</span><strong>{money(penalty)}</strong></div><div><span>Total Paid</span><strong className="paid-value">{money(ticket.total_paid)}</strong></div><div><span>Remaining Balance</span><strong className="balance-value">{money(ticket.remaining_balance)}</strong></div></div>
 
-      {isAdmin&&<div className="ticket-admin-actions">{ticket.status==='paid'&&<button className="btn btn-secondary" onClick={()=>startAction('unpaid')}>Mark Unpaid</button>}<button className="btn btn-ghost danger-link" disabled={!canDelete} title={canDelete?'Permanently delete eligible citation':'Deletion is restricted to unpaid or cancelled citations with no linked payment, dispute, evidence or email records.'} onClick={()=>startAction('delete')}>Permanent Delete</button></div>}
+      {isAdmin&&<div className="ticket-admin-actions">{ticket.status==='paid'&&<button className="btn btn-secondary" onClick={()=>startAction('unpaid')}>Mark Unpaid</button>}<button className="btn btn-ghost danger-link" disabled={!canDelete} title={canDelete?'Permanently delete eligible citation':'Paid citations and tickets with payments, disputes, evidence or delivered/uncertain email history cannot be deleted. Cancelled citations with failed email attempts may be deleted with archived history.'} onClick={()=>startAction('delete')}>Permanent Delete</button></div>}
     </section>
 
     <section className="card no-print">
@@ -332,7 +332,7 @@ export default function TicketDetails() {
     </Modal>
 
     <Modal open={actionOpen} title={actionType==='cancel'?'Cancel Ticket':actionType==='unpaid'?'Mark Ticket Unpaid':'Permanently Delete Ticket'} onClose={()=>setActionOpen(false)} footer={<><button className="btn btn-secondary" onClick={()=>setActionOpen(false)}>Back</button><button className="btn btn-danger" disabled={busy || (actionType==='delete' && deleteConfirmation!==ticket.ticket_number)} onClick={performAdminAction}>{busy?'Working…':actionType==='delete'?'Delete Permanently':'Confirm'}</button></>}>
-      <Notice type="error">{actionType==='delete'?'Only eligible test or mistaken citations without protected payment, dispute, evidence or email history can be deleted. This cannot be undone.':''}</Notice>
+      <Notice type="error">{actionType==='delete'?'Permanent deletion is restricted to eligible citations. Failed email history on cancelled citations will be archived in the audit log; payment, dispute, evidence and delivered/uncertain email history remain protected. This cannot be undone.':''}</Notice>
       <label className="field"><span>Reason *</span><textarea rows="4" minLength="5" maxLength="500" value={actionReason} onChange={e=>setActionReason(e.target.value)} placeholder="Enter the reason for this administrative action."/></label>
       {actionType==='delete'&&<label className="field"><span>Confirm citation number: {ticket.ticket_number}</span><input autoComplete="off" value={deleteConfirmation} onChange={event=>setDeleteConfirmation(event.target.value)} placeholder={ticket.ticket_number}/></label>}
     </Modal>
