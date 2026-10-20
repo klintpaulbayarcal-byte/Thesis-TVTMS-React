@@ -331,10 +331,15 @@ export default function TicketDetails() {
       </div>
     </Modal>
 
-    <Modal open={actionOpen} title={actionType==='cancel'?'Cancel Ticket':actionType==='unpaid'?'Mark Ticket Unpaid':'Permanently Delete Ticket'} onClose={()=>setActionOpen(false)} footer={<><button className="btn btn-secondary" onClick={()=>setActionOpen(false)}>Back</button><button className="btn btn-danger" disabled={busy || (actionType==='delete' && deleteConfirmation!==ticket.ticket_number)} onClick={performAdminAction}>{busy?'Working…':actionType==='delete'?'Delete Permanently':'Confirm'}</button></>}>
-      <Notice type="error">{actionType==='delete'?'Permanent deletion is restricted to eligible citations. Failed email history on cancelled citations will be archived in the audit log; payment, dispute, evidence and delivered/uncertain email history remain protected. This cannot be undone.':''}</Notice>
-      <label className="field"><span>Reason *</span><textarea rows="4" minLength="5" maxLength="500" value={actionReason} onChange={e=>setActionReason(e.target.value)} placeholder="Enter the reason for this administrative action."/></label>
-      {actionType==='delete'&&<label className="field"><span>Confirm citation number: {ticket.ticket_number}</span><input autoComplete="off" value={deleteConfirmation} onChange={event=>setDeleteConfirmation(event.target.value)} placeholder={ticket.ticket_number}/></label>}
+    <Modal open={actionOpen} title={actionType==='cancel'?'Cancel Ticket':actionType==='unpaid'?'Mark Ticket Unpaid':'Permanently Delete Ticket'} onClose={()=>setActionOpen(false)} footer={<><button className="btn btn-secondary" onClick={()=>setActionOpen(false)}>Back</button><button className="btn btn-danger" disabled={busy || actionReason.trim().length < 5 || (actionType==='delete' && deleteConfirmation!==ticket.ticket_number)} onClick={performAdminAction}>{busy?'Working…':actionType==='delete'?'Delete Permanently':'Confirm'}</button></>}>
+      {actionType==='delete'&&<Notice type="error">This permanently removes an eligible citation. Cancelled citations with failed email history are archived in the audit log first. Payment, dispute, evidence and delivered/uncertain email records remain protected. This cannot be undone.</Notice>}
+      <label className="field"><span>Reason * (at least 5 characters)</span><textarea rows="4" minLength="5" maxLength="500" value={actionReason} onChange={e=>setActionReason(e.target.value)} placeholder="For example: Duplicate test citation" aria-describedby="admin-action-reason-help"/></label>
+      <small id="admin-action-reason-help">{actionReason.trim().length < 5 ? 'Enter a reason of at least 5 characters to continue.' : 'Reason entered.'}</small>
+      {actionType==='delete'&&<>
+        <label className="field"><span>Confirm citation number: <strong>{ticket.ticket_number}</strong> *</span><input autoComplete="off" spellCheck={false} value={deleteConfirmation} onChange={event=>setDeleteConfirmation(event.target.value)} placeholder="Type the citation number here" aria-describedby="admin-delete-number-help"/></label>
+        <small id="admin-delete-number-help">{deleteConfirmation===ticket.ticket_number ? 'Citation number confirmed.' : <>Manually type <strong>{ticket.ticket_number}</strong> in the box above. It is NOT filled automatically.</>}</small>
+        <p><small>{actionReason.trim().length >= 5 && deleteConfirmation===ticket.ticket_number ? 'Both confirmations are complete. You can now select Delete Permanently.' : 'Delete Permanently will unlock after you enter both a valid reason and the exact citation number.'}</small></p>
+      </>}
     </Modal>
   </div>;
 }
