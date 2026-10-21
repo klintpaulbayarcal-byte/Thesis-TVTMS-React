@@ -32,6 +32,7 @@ export default function TicketDetails() {
   const [actionType, setActionType] = useState('');
   const [actionReason, setActionReason] = useState('');
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [archiveConfirmation, setArchiveConfirmation] = useState('');
   const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(false);
   const [notificationBusy, setNotificationBusy] = useState(false);
@@ -70,7 +71,7 @@ export default function TicketDetails() {
   useEffect(() => {
     if (loading || !ticket || String(ticket.id)!==String(id) || !isAdmin) return;
     const intent=new URLSearchParams(search).get('action');
-    if (!['edit','cancel','delete'].includes(intent)) return;
+    if (!['edit','cancel','delete','archive'].includes(intent)) return;
     const effectiveStatus=effectivePaymentStatus(ticket);
     const canReviewDelete=ticket.delete_eligible===true;
     if (intent==='edit' && ticket.status==='unpaid') {
@@ -79,6 +80,13 @@ export default function TicketDetails() {
       setActionType('cancel');
       setActionReason('');
       setDeleteConfirmation('');
+      setActionError('');
+      setActionOpen(true);
+    } else if (intent==='archive') {
+      setActionType('archive');
+      setActionReason('');
+      setDeleteConfirmation('');
+      setArchiveConfirmation('');
       setActionError('');
       setActionOpen(true);
     } else if (intent==='delete' && canReviewDelete) {
@@ -197,6 +205,7 @@ export default function TicketDetails() {
     setActionType(type);
     setActionReason('');
     setDeleteConfirmation('');
+    setArchiveConfirmation('');
     setActionError('');
     setActionOpen(true);
   };
@@ -206,8 +215,12 @@ export default function TicketDetails() {
       setActionError('Please provide a reason with at least 5 characters.');
       return;
     }
-    if (actionType === 'delete' && deleteConfirmation !== ticket?.ticket_number) {
+    if (['delete','archive'].includes(actionType) && deleteConfirmation !== ticket?.ticket_number) {
       setActionError('Type the exact citation number before deleting.');
+      return;
+    }
+    if (actionType === 'archive' && (archiveConfirmation !== 'ARCHIVE AND DELETE' || actionReason.trim().length < 10)) {
+      setActionError('Enter a reason of at least 10 characters and type ARCHIVE AND DELETE.');
       return;
     }
     if (busy) return;
@@ -216,6 +229,11 @@ export default function TicketDetails() {
     try {
       if (actionType === 'cancel') await API.cancelTicket(id, actionReason.trim());
       if (actionType === 'unpaid') await API.markUnpaid(id, actionReason.trim());
+      if (actionType === 'archive') {
+        await API.archiveRemoveTicket(id, actionReason.trim(), deleteConfirmation, archiveConfirmation);
+        navigate('/admin/tickets', { replace: true });
+        return;
+      }
       if (actionType === 'delete') {
         await API.permanentDeleteTicket(id, actionReason.trim(), deleteConfirmation);
         navigate('/admin/tickets', { replace: true });
@@ -340,7 +358,7 @@ export default function TicketDetails() {
       ].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'Not recorded'}</dd></div>)}</div><p>The seven-day appearance deadline is separate from the payment and dispute deadlines.</p></section>}
       <div className="ticket-financial-strip"><div><span>Total Citation Penalty</span><strong>{money(penalty)}</strong></div><div><span>Total Paid</span><strong className="paid-value">{money(ticket.total_paid)}</strong></div><div><span>Remaining Balance</span><strong className="balance-value">{money(ticket.remaining_balance)}</strong></div></div>
 
-      {isAdmin&&<div className="ticket-admin-actions">{ticket.status==='paid'&&<button className="btn btn-secondary" onClick={()=>startAction('unpaid')}>Mark Unpaid</button>}<button className="btn btn-ghost danger-link" disabled={!canDelete} title={canDelete?'Permanently delete eligible citation':ticket.delete_block_reason || 'Deletion eligibility is unavailable. Refresh before attempting any deletion.'} onClick={()=>startAction('delete')}>Permanent Delete</button></div>}
+      {isAdmin&&<div className="ticket-admin-actions">{ticket.status==='paid'&&<button className="btn btn-secondary" onClick={()=>startAction('unpaid')}>Mark Unpaid</button>}<button className="btn btn-ghost danger-link" disabled={!canDelete} title={canDelete?'Permanently delete eligible citation':ticket.delete_block_reason || 'Deletion eligibility is unavailable. Refresh before attempting any deletion.'} onClick={()=>startAction('delete')}>Permanent Delete</button>{!canDelete&&<button className="btn btn-secondary danger-link" onClick={()=>startAction('archive')}>Archive and Remove Protected Citation</button>}</div>}
     </section>
 
     <section className="card no-print">
@@ -400,15 +418,17 @@ export default function TicketDetails() {
       </div>
     </Modal>
 
-    <Modal open={actionOpen} title={actionType==='cancel'?'Cancel Ticket':actionType==='unpaid'?'Mark Ticket Unpaid':'Permanently Delete Ticket'} onClose={()=>setActionOpen(false)} footer={<><button className="btn btn-secondary" onClick={()=>setActionOpen(false)}>Back</button><button className="btn btn-danger" disabled={busy || actionReason.trim().length < 5 || (actionType==='delete' && deleteConfirmation!==ticket.ticket_number)} onClick={performAdminAction}>{busy?'Working…':actionType==='delete'?'Delete Permanently':'Confirm'}</button></>}>
+    <Modal open={actionOpen} title={actionType==='cancel'?'Cancel Ticket':actionType==='unpaid'?'Mark Ticket Unpaid':actionType==='archive'?'Archive and Remove Protected Citation':'Permanently Delete Ticket'} onClose={()=>setActionOpen(false)} footer={<><button className="btn btn-secondary" onClick={()=>setActionOpen(false)}>Back</button><button className="btn btn-danger" disabled={busy || actionReason.trim().length < (actionType==='archive'?10:5) || (['delete','archive'].includes(actionType) && deleteConfirmation!==ticket.ticket_number) || (actionType==='archive' && archiveConfirmation!=='ARCHIVE AND DELETE')} onClick={performAdminAction}>{busy?'Working…':actionType==='archive'?'Archive and Remove':actionType==='delete'?'Delete Permanently':'Confirm'}</button></>}>
       {actionError&&<Notice type="error">{actionError} — The citation has not been confirmed deleted. Refresh its status before trying again.</Notice>}
+      {actionType==='archive'&&<Notice type="error">This exceptional Administrator action removes the citation from live operational tables, but preserves the entire citation, official payment ledger, disputes, evidence, history, and notification records in a restricted archive. It cannot be undone from this screen and must only be used with documented authorization.</Notice>}
       {actionType==='delete'&&<Notice type="error">This permanently removes an eligible citation. Cancelled citations with failed email history are archived in the audit log first. Payment, dispute, evidence and delivered/uncertain email records remain protected. This cannot be undone.</Notice>}
       <label className="field"><span>Reason * (at least 5 characters)</span><textarea rows="4" minLength="5" maxLength="500" value={actionReason} onChange={e=>setActionReason(e.target.value)} placeholder="For example: Duplicate test citation" aria-describedby="admin-action-reason-help"/></label>
       <small id="admin-action-reason-help">{actionReason.trim().length < 5 ? 'Enter a reason of at least 5 characters to continue.' : 'Reason entered.'}</small>
-      {actionType==='delete'&&<>
+      {['delete','archive'].includes(actionType)&&<>
         <label className="field"><span>Confirm citation number: <strong>{ticket.ticket_number}</strong> *</span><input autoComplete="off" spellCheck={false} value={deleteConfirmation} onChange={event=>setDeleteConfirmation(event.target.value)} placeholder="Type the citation number here" aria-describedby="admin-delete-number-help"/></label>
         <small id="admin-delete-number-help">{deleteConfirmation===ticket.ticket_number ? 'Citation number confirmed.' : <>Manually type <strong>{ticket.ticket_number}</strong> in the box above. It is NOT filled automatically.</>}</small>
-        <p><small>{actionReason.trim().length >= 5 && deleteConfirmation===ticket.ticket_number ? 'Both confirmations are complete. You can now select Delete Permanently.' : 'Delete Permanently will unlock after you enter both a valid reason and the exact citation number.'}</small></p>
+        {actionType==='archive'&&<label className="field"><span>Additional confirmation: type ARCHIVE AND DELETE *</span><input autoComplete="off" spellCheck={false} value={archiveConfirmation} onChange={event=>setArchiveConfirmation(event.target.value)} placeholder="ARCHIVE AND DELETE"/></label>}
+        <p><small>{actionType==='archive'?'A complete archive and an audit entry must both be persisted before removal. Reason must be at least 10 characters.':'Ordinary deletion requires a valid reason and the exact citation number.'}</small></p>
       </>}
     </Modal>
   </div>;
