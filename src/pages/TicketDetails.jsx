@@ -1,5 +1,6 @@
 import { printPublicTicketQr } from '../utils/printQr';
 import { effectivePaymentStatus } from '../utils/paymentStatus';
+import { paymentDisputeDecision, PAYMENT_DISPUTE_UNAVAILABLE } from '../utils/paymentDisputeGate';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import QRCode from 'qrcode';
@@ -114,6 +115,31 @@ export default function TicketDetails() {
 
   const timeline = useMemo(() => Array.isArray(ticket?.timeline) ? ticket.timeline : [], [ticket]);
 
+  // UI safeguard only; the database payment RPC remains authoritative.
+  const checkPaymentDispute = async () => {
+    try {
+      return paymentDisputeDecision(await API.disputes({ticketId: id}), id);
+    } catch {
+      return {allowed:false,message:PAYMENT_DISPUTE_UNAVAILABLE};
+    }
+  };
+
+  const openPayment = async () => {
+    if (busy || !isAdmin || !ticket || ticket.status === 'cancelled') return;
+    setBusy(true);
+    try {
+      const gate = await checkPaymentDispute();
+      if (!gate.allowed) {
+        setNotice({type:'error',text:gate.message});
+        return;
+      }
+      setNotice({type:'',text:''});
+      setPaymentOpen(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const recordPayment = async () => {
     if (!payment.amount_paid || !payment.official_receipt_number.trim()) {
       setNotice({ type: 'error', text: 'Amount and official receipt number are required.' });
@@ -127,6 +153,12 @@ export default function TicketDetails() {
     }
     setBusy(true);
     try {
+      const gate = await checkPaymentDispute();
+      if (!gate.allowed) {
+        setPaymentOpen(false);
+        setNotice({type:'error',text:gate.message});
+        return;
+      }
       await API.recordPayment({
         ticket_id: Number(id),
         amount_paid: Number(payment.amount_paid),
@@ -254,7 +286,7 @@ export default function TicketDetails() {
   const printQr = () => {
     if (!qrCanvas.current || !ticket?.ticket_number) return;
     if (!printPublicTicketQr(qrCanvas.current, ticket.ticket_number)) {
-      setNotice({ type: 'error', text: 'Allow pop-ups to print the ticket QR code.' });
+      setNotice({ type: 'error', text: 'The QR print view is unavailable. Refresh the citation and try printing again.' });
     }
   };
 
@@ -331,7 +363,7 @@ export default function TicketDetails() {
 
     <div className="two-col ticket-support-grid">
       <section className="card">
-        <div className="card-header"><div><span className="section-kicker">SETTLEMENT</span><h3 className="card-title">Payment History</h3></div>{canRecordPayment&&<button className="btn btn-primary btn-sm" onClick={()=>setPaymentOpen(true)}>Record Payment</button>}</div>
+        <div className="card-header"><div><span className="section-kicker">SETTLEMENT</span><h3 className="card-title">Payment History</h3></div>{canRecordPayment&&<button className="btn btn-primary btn-sm" disabled={busy} onClick={openPayment}>Record Payment</button>}</div>
         <div className="card-body"><DataTable columns={[
           {key:'official_receipt_number',label:'Receipt'},
           {key:'amount_paid',label:'Amount',render:r=>money(r.amount_paid)},
