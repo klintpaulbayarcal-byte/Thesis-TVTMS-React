@@ -167,6 +167,7 @@ export const API = {
   updateTicketDetails: (id, data) => apiRequest(`/tickets/${id}/details`, { method: 'PUT', body: JSON.stringify(data) }),
   cancelTicket: (id, reason) => apiRequest(`/tickets/${id}`, { method: 'DELETE', body: JSON.stringify({ reason }) }),
   permanentDeleteTicket: (id, reason, confirmTicketNumber) => apiRequest(`/tickets/${id}/permanent`, { method: 'POST', body: JSON.stringify({ reason, confirm_ticket_number: confirmTicketNumber }) }),
+  archiveRemoveTicket: (id, reason, confirmTicketNumber, confirmPhrase) => apiRequest(`/tickets/${id}/archive-remove`, { method: 'POST', body: JSON.stringify({ reason, confirm_ticket_number: confirmTicketNumber, confirmation: confirmPhrase }) }),
   markUnpaid: (id, reason) => apiRequest(`/tickets/${id}/mark-unpaid`, { method: 'PUT', body: JSON.stringify({ reason }) }),
   ticketStats: (filters, options) => apiRequest(`/tickets/stats${qs(filters) ? `?${qs(filters)}` : ''}`, options),
   searchTickets: (search, mode) => apiRequest(`/tickets/search?${qs({ search, mode })}`),

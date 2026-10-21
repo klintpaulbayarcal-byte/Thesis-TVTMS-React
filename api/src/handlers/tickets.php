@@ -333,6 +333,37 @@ function tickets_permanent_delete(array $params): never
     ]);
 }
 
+function tickets_admin_archive_remove(array $params): never
+{
+    $u=require_role(['admin']);
+    $id=ticket_valid_id($params['id']??0);
+    $body=json_input();
+    $reason=clean_string($body['reason']??'',500);
+    $confirmed=trim((string)($body['confirm_ticket_number']??''));
+    $phrase=(string)($body['confirmation']??'');
+    if(strlen($reason)<10)fail('Provide an archive/removal reason of at least 10 characters.',400,'VALIDATION_ERROR');
+    if($confirmed===''||$phrase!=='ARCHIVE AND DELETE')
+        fail('Enter the exact citation number and ARCHIVE AND DELETE.',409,'ARCHIVE_CONFIRMATION_REQUIRED');
+    try{
+        $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_admin_archived_delete',[
+            'p_id'=>$id,'p_user_id'=>(int)$u['id'],
+            'p_ticket_number'=>$confirmed,'p_reason'=>$reason,'p_confirmation'=>$phrase,
+        ]));
+    }catch(SupabaseException $e){
+        error_log('Protected citation archive RPC unavailable: '.get_class($e));
+        fail('Protected archive/removal is unavailable. No deletion was confirmed.',503,'ARCHIVE_RPC_UNAVAILABLE');
+    }
+    if(($r['archivedAndRemoved']??false)!==true
+       ||(int)($r['authorizationAuditId']??0)<=0
+       ||(int)($r['archiveId']??0)<=0
+       ||($r['ticketNumber']??'')!==$confirmed)
+        fail('Archive/removal cannot be verified. Refresh before retrying.',503,'ARCHIVE_VERIFICATION_FAILED');
+    ok('Citation removed from operational records and preserved in restricted archive',[
+        'ticketNumber'=>$confirmed,'archiveId'=>(int)$r['archiveId'],
+        'authorizationAuditId'=>(int)$r['authorizationAuditId'],
+    ]);
+}
+
 function tickets_mark_unpaid(array $params): never
 {
     $u=require_role(['admin']);$id=ticket_valid_id($params['id']??0);$reason=clean_string(json_input()['reason']??'',500);

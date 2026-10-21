@@ -39,6 +39,7 @@ function api_routes(): array
         ['PUT', '#^/api/tickets/(?P<id>\d+)/mark-unpaid/?$#', 'tickets_mark_unpaid'],
         ['DELETE', '#^/api/tickets/(?P<id>\d+)/permanent/?$#', 'tickets_permanent_delete'],
         ['POST', '#^/api/tickets/(?P<id>\d+)/permanent/?$#', 'tickets_permanent_delete'],
+        ['POST', '#^/api/tickets/(?P<id>\d+)/archive-remove/?$#', 'tickets_admin_archive_remove'],
         ['GET', '#^/api/tickets/(?P<id>\d+)/?$#', 'tickets_get_one'],
         ['PUT', '#^/api/tickets/(?P<id>\d+)/?$#', 'tickets_update_status'],
         ['DELETE', '#^/api/tickets/(?P<id>\d+)/?$#', 'tickets_cancel'],
