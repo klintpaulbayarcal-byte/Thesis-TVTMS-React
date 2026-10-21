@@ -26,6 +26,7 @@ function component(name, API) {
     if(id==='react')return react;
     if(id==='react/jsx-runtime')return require(id);
     if(id.endsWith('/services/api'))return {API};
+    if(id.endsWith('/context/AuthContext'))return {useAuth:()=>({user:{id:1,role:'admin'}})};
     if(id.endsWith('/utils/paymentDisputeGate'))return paymentDisputeGate;
     if(id.endsWith('/utils/format'))return {firstArray:r=>r.violations||r.disputes||r.payments||r.users||r.data||[],money:String,dateTime:String,manilaDateKey:()=> '2026-10-20'};
     return {__esModule:true,default:named(id.split('/').pop())};
