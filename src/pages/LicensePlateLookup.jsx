@@ -128,7 +128,7 @@ export default function LicensePlateLookup(){
       </div></section>
 
       <section className="lookup-section"><div className="section-title"><Icon name="analytics"/> Plate Ticket Summary</div><div className="summary-cards">
-        <div className="summary-card"><div className="card-label">Total Violations</div><div className="card-value">{stats?.total_violations??violations.length}</div></div>
+        <div className="summary-card"><div className="card-label">Historical Citations</div><div className="card-value">{stats?.historical_ticket_count??violations.length}</div></div><div className="summary-card"><div className="card-label">Individual Violations</div><div className="card-value">{violations.reduce((sum,item)=>sum+(Array.isArray(item.violations)&&item.violations.length?item.violations.length:1),0)}</div></div>
         <div className="summary-card paid"><div className="card-label">Paid Violations</div><div className="card-value">{stats?.paid_count??0}</div></div>
         <div className="summary-card unpaid"><div className="card-label">Unpaid Violations</div><div className="card-value">{stats?.unpaid_count??0}</div></div>
         <div className="summary-card"><div className="card-label">Total Outstanding</div><div className="card-value">{money(stats?.outstanding_balance)}</div></div>
