@@ -6,6 +6,7 @@ import ts from 'typescript';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createRequire } from 'node:module';
+import * as paymentDisputeGate from '../src/utils/paymentDisputeGate.js';
 const require = createRequire(import.meta.url);
 
 function component(name, API) {
@@ -25,6 +26,7 @@ function component(name, API) {
     if(id==='react')return react;
     if(id==='react/jsx-runtime')return require(id);
     if(id.endsWith('/services/api'))return {API};
+    if(id.endsWith('/utils/paymentDisputeGate'))return paymentDisputeGate;
     if(id.endsWith('/utils/format'))return {firstArray:r=>r.violations||r.disputes||r.payments||r.users||r.data||[],money:String,dateTime:String,manilaDateKey:()=> '2026-10-20'};
     return {__esModule:true,default:named(id.split('/').pop())};
   };
@@ -93,9 +95,9 @@ test('dispute write errors stay in the dialog and confirmed saves survive refres
 });
 
 async function paymentForm(API){
-  const render=component('Payments',{paymentsForTicket:async()=>({payments:[]}),...API});
+  const render=component('Payments',{paymentsForTicket:async()=>({payments:[]}),disputes:async()=>({disputes:[]}),...API});
   await type(render(),'DataTable')[0].props.onRowClick({id:100,ticket_number:'QA-ONLY',remaining_balance:10});
-  button(render(),' Record Payment').props.onClick();
+  await button(render(),' Record Payment').props.onClick();
   let tree=render();type(tree,'input').find(n=>n.props.type==='number').props.onChange({target:{value:'5'}});
   tree=render();type(tree,'input').find(n=>!n.props.type).props.onChange({target:{value:'QA-OR-ONLY'}});
   return render;
@@ -123,13 +125,13 @@ test('payment dialog permits only one in-flight posting before rerender',async()
   let writes=0,release;const pending=new Promise(resolve=>{release=resolve;});
   const render=await paymentForm({recordPayment:()=>{writes++;return pending;},ticket:async()=>({ticket:{id:100,remaining_balance:5}}),tickets:async()=>({data:[]})});
   const save=button(render(),'Save Payment').props.onClick;
-  const first=save();const second=save();assert.equal(writes,1);
+  const first=save();const second=save();await tick();assert.equal(writes,1);
   release({success:true});await Promise.all([first,second]);
 });
 
 test('payment selection ignores late history and clears the previous ticket history',async()=>{
   const pending=new Map();
-  const render=component('Payments',{paymentsForTicket:id=>new Promise(resolve=>pending.set(id,resolve))});
+  const render=component('Payments',{paymentsForTicket:id=>new Promise(resolve=>pending.set(id,resolve)),disputes:async()=>({disputes:[]})});
   const select=row=>type(render(),'DataTable')[0].props.onRowClick(row);
   const first=select({id:100,ticket_number:'QA-A',remaining_balance:10});
   const second=select({id:101,ticket_number:'QA-B',remaining_balance:20});
@@ -145,7 +147,7 @@ test('payment selection is locked while a posting is awaiting confirmation',asyn
   let release;
   const render=await paymentForm({recordPayment:()=>new Promise(resolve=>{release=resolve;}),
     ticket:async()=>({ticket:{id:100,ticket_number:'QA-ONLY',remaining_balance:5}}),tickets:async()=>({data:[]})});
-  const posting=button(render(),'Save Payment').props.onClick();
+  const posting=button(render(),'Save Payment').props.onClick();await tick();
   await type(render(),'DataTable')[0].props.onRowClick({id:101,ticket_number:'QA-B',remaining_balance:20});
   assert.match(type(render(),'Modal')[0].props.title,/QA-ONLY/);
   release({success:true});await posting;

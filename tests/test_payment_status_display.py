@@ -9,3 +9,5 @@ def test_ticket_table_displays_derived_payment_status():
     assert "label:'Status',render:row=><StatusBadge value={effectivePaymentStatus(row)}/>" in source
     assert "API.recordPayment({ticket_id:selected.id,...form,amount_paid:Number(form.amount_paid)})" in source
     assert "Number(selected.remaining_balance||0)>0" in source
+    assert "disabled={checking||!disputeGate.allowed}" in source
+    assert "const gate=await checkDispute(selected.id);" in source
