@@ -20,3 +20,9 @@ def test_staff_plate_lookup_separates_citations_and_violation_items():
     assert 'Individual Violations' in ui
     assert "stats?.historical_ticket_count" in ui
     assert 'violations.reduce((sum,item)' in ui
+
+def test_public_plate_lookup_labels_count_from_listed_citations():
+    ui=(ROOT/'src/pages/PublicTicketLookup.jsx').read_text()
+    assert 'Historical Tickets' in ui
+    assert 'Violations in Listed Citations' in ui
+    assert 'tickets.reduce((sum,ticket)' in ui
