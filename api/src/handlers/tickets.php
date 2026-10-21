@@ -70,29 +70,11 @@ function ticket_valid_id(mixed $value): int
     return $id;
 }
 
-function tickets_list(array $params=[]): never
+function ticket_enrich_delete_eligibility(array $tickets): array
 {
-    $u=require_role(['admin','apprehending_officer']);
-    $page=max(1,(int)($_GET['page']??1));
-    $pageSize=min(100,max(1,(int)($_GET['pageSize']??20)));
-    $sortBy=(string)($_GET['sortBy']??'date_issued');
-    if(!in_array($sortBy,['date_issued','time_issued','ticket_number','status','plate_number'],true))$sortBy='date_issued';
-    $sortOrder=strtoupper((string)($_GET['sortOrder']??'DESC'))==='ASC'?'ASC':'DESC';
-    $status=trim((string)($_GET['status']??''));
-    $map=['draft'=>'unpaid','issued'=>'unpaid','pending_payment'=>'unpaid','partially_paid'=>'unpaid','unpaid'=>'unpaid','paid'=>'paid','closed'=>'paid','cancelled'=>'cancelled','voided'=>'cancelled'];
-    $filters=[
-        'status'=>$status!==''?($map[$status]??$status):null,
-        'dateFrom'=>$_GET['dateFrom']??null,'dateTo'=>$_GET['dateTo']??null,
-        'enforcerId'=>$_GET['enforcerId']??null,'violation'=>$_GET['violation']??null,
-        'location'=>$_GET['location']??null,'search'=>$_GET['search']??null,
-        'officerId'=>$u['role']==='apprehending_officer'?(int)$u['id']:null,
-        'sortBy'=>$sortBy,'sortOrder'=>$sortOrder,'pageSize'=>$pageSize,'offset'=>($page-1)*$pageSize,
-    ];
-    $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_list',['p_filters'=>$filters]));
-    $tickets=is_array($r['tickets']??null)?$r['tickets']:[];$tickets=ticket_enrich_payment_totals($tickets);$total=(int)($r['total']??0);
     // Administrator list must not offer deletion when the protected record checks
     // would reject it. Fail closed if any related-record lookup is unavailable.
-    if($u['role']==='admin'&&$tickets){
+    if($tickets){
         $ids=array_values(array_unique(array_filter(array_map(static fn($t)=>(int)($t['id']??0),$tickets))));
         $protected=[];
         $verified=false;
@@ -126,6 +108,30 @@ function tickets_list(array $params=[]): never
         }
         unset($item);
     }
+    return $tickets;
+}
+
+function tickets_list(array $params=[]): never
+{
+    $u=require_role(['admin','apprehending_officer']);
+    $page=max(1,(int)($_GET['page']??1));
+    $pageSize=min(100,max(1,(int)($_GET['pageSize']??20)));
+    $sortBy=(string)($_GET['sortBy']??'date_issued');
+    if(!in_array($sortBy,['date_issued','time_issued','ticket_number','status','plate_number'],true))$sortBy='date_issued';
+    $sortOrder=strtoupper((string)($_GET['sortOrder']??'DESC'))==='ASC'?'ASC':'DESC';
+    $status=trim((string)($_GET['status']??''));
+    $map=['draft'=>'unpaid','issued'=>'unpaid','pending_payment'=>'unpaid','partially_paid'=>'unpaid','unpaid'=>'unpaid','paid'=>'paid','closed'=>'paid','cancelled'=>'cancelled','voided'=>'cancelled'];
+    $filters=[
+        'status'=>$status!==''?($map[$status]??$status):null,
+        'dateFrom'=>$_GET['dateFrom']??null,'dateTo'=>$_GET['dateTo']??null,
+        'enforcerId'=>$_GET['enforcerId']??null,'violation'=>$_GET['violation']??null,
+        'location'=>$_GET['location']??null,'search'=>$_GET['search']??null,
+        'officerId'=>$u['role']==='apprehending_officer'?(int)$u['id']:null,
+        'sortBy'=>$sortBy,'sortOrder'=>$sortOrder,'pageSize'=>$pageSize,'offset'=>($page-1)*$pageSize,
+    ];
+    $r=ticket_rpc_result(supabase_rpc('tvtms_ticket_list',['p_filters'=>$filters]));
+    $tickets=is_array($r['tickets']??null)?$r['tickets']:[];$tickets=ticket_enrich_payment_totals($tickets);$total=(int)($r['total']??0);
+    if($u['role']==='admin')$tickets=ticket_enrich_delete_eligibility($tickets);
     $pagination=['page'=>$page,'pageSize'=>$pageSize,'total'=>$total,'totalPages'=>max(1,(int)ceil($total/$pageSize))];
     ok('Tickets fetched successfully',$tickets,['tickets'=>$tickets,'pagination'=>$pagination]);
 }
@@ -144,6 +150,7 @@ function tickets_get_one(array $params): never
     $enriched=ticket_enrich_payment_totals([$ticket]);
     $ticket=$enriched[0]??$ticket;
     $ticket['notification']=ticket_notification_read($ticket);
+    if($u['role']==='admin')$ticket=ticket_enrich_delete_eligibility([$ticket])[0];
     ok('Ticket fetched successfully',$ticket,['ticket'=>$ticket]);
 }
 

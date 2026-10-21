@@ -72,7 +72,7 @@ export default function TicketDetails() {
     if (!['edit','cancel','delete'].includes(intent)) return;
     const notification=ticket.notification??{};
     const effectiveStatus=effectivePaymentStatus(ticket);
-    const canReviewDelete=['unpaid','cancelled'].includes(ticket.status)
+    const canReviewDelete=ticket.delete_eligible===true && ['unpaid','cancelled'].includes(ticket.status)
       && effectiveStatus!=='partially_paid'
       && payments.length===0 && evidence.length===0
       && !ticket.has_dispute
@@ -270,7 +270,7 @@ export default function TicketDetails() {
   const canEdit = ticket.status === 'unpaid';
   const canRecordPayment = isAdmin && ticket.status !== 'cancelled' && Number(ticket.remaining_balance ?? penalty ?? 0) > 0;
   const notification = ticket.notification ?? {};
-  const canDelete = isAdmin && ['unpaid','cancelled'].includes(ticket.status) && payments.length === 0 && evidence.length === 0 && !ticket.has_dispute && (notification.status === 'not_recorded' || (ticket.status === 'cancelled' && notification.status === 'failed'));
+  const canDelete = isAdmin && ticket.delete_eligible===true && ['unpaid','cancelled'].includes(ticket.status) && payments.length === 0 && evidence.length === 0 && !ticket.has_dispute && (notification.status === 'not_recorded' || (ticket.status === 'cancelled' && notification.status === 'failed'));
 
   const timelineColumns = [
     { key: 'created_at', label: 'Date', render: row => dateTime(row.created_at) },
@@ -312,7 +312,7 @@ export default function TicketDetails() {
       ].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'Not recorded'}</dd></div>)}</div><p>The seven-day appearance deadline is separate from the payment and dispute deadlines.</p></section>}
       <div className="ticket-financial-strip"><div><span>Total Citation Penalty</span><strong>{money(penalty)}</strong></div><div><span>Total Paid</span><strong className="paid-value">{money(ticket.total_paid)}</strong></div><div><span>Remaining Balance</span><strong className="balance-value">{money(ticket.remaining_balance)}</strong></div></div>
 
-      {isAdmin&&<div className="ticket-admin-actions">{ticket.status==='paid'&&<button className="btn btn-secondary" onClick={()=>startAction('unpaid')}>Mark Unpaid</button>}<button className="btn btn-ghost danger-link" disabled={!canDelete} title={canDelete?'Permanently delete eligible citation':'Paid citations and tickets with payments, disputes, evidence or delivered/uncertain email history cannot be deleted. Cancelled citations with failed email attempts may be deleted with archived history.'} onClick={()=>startAction('delete')}>Permanent Delete</button></div>}
+      {isAdmin&&<div className="ticket-admin-actions">{ticket.status==='paid'&&<button className="btn btn-secondary" onClick={()=>startAction('unpaid')}>Mark Unpaid</button>}<button className="btn btn-ghost danger-link" disabled={!canDelete} title={canDelete?'Permanently delete eligible citation':ticket.delete_block_reason||'Paid citations and tickets with payments, disputes, evidence or delivered/uncertain email history cannot be deleted. Cancelled citations with failed email attempts may be deleted with archived history.'} onClick={()=>startAction('delete')}>Permanent Delete</button></div>}
     </section>
 
     <section className="card no-print">
