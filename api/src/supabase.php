@@ -40,6 +40,10 @@ function supabase_config(): array
     $c = app_config();
     $url = rtrim(trim((string)($c['supabase_url'] ?? '')), '/');
     $key = trim((string)($c['supabase_secret_key'] ?? ''));
+    if (PHP_SAPI === 'cli-server' && !empty($c['isolated_development'])
+        && $url === 'http://127.0.0.1:54321' && $key === 'local-fixture-only') {
+        return [$url, $key];
+    }
     if ($url === '' || !str_starts_with($url, 'https://')) {
         throw new RuntimeException('SUPABASE URL is missing or invalid.');
     }

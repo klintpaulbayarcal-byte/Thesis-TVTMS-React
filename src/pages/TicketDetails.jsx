@@ -1,6 +1,10 @@
+import { printPublicTicketQr } from '../utils/printQr';
+import { effectivePaymentStatus } from '../utils/paymentStatus';
+import { paymentDisputeDecision, PAYMENT_DISPUTE_UNAVAILABLE } from '../utils/paymentDisputeGate';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import QRCode from 'qrcode';
+import CitationViolations from '../components/CitationViolations';
 import { API } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import PageHeader from '../components/PageHeader';
@@ -8,13 +12,14 @@ import StatusBadge from '../components/StatusBadge';
 import DataTable from '../components/DataTable';
 import Notice from '../components/Notice';
 import Modal from '../components/Modal';
-import { dateOnly, dateTime, firstArray, money } from '../utils/format';
+import { dateOnly, dateTime, firstArray, money, manilaDateKey } from '../utils/format';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = manilaDateKey;
 
 export default function TicketDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { search } = useLocation();
   const { isAdmin } = useAuth();
   const [ticket, setTicket] = useState(null);
   const [payments, setPayments] = useState([]);
@@ -26,7 +31,11 @@ export default function TicketDetails() {
   const [actionOpen, setActionOpen] = useState(false);
   const [actionType, setActionType] = useState('');
   const [actionReason, setActionReason] = useState('');
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [archiveConfirmation, setArchiveConfirmation] = useState('');
+  const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [notificationBusy, setNotificationBusy] = useState(false);
   const qrCanvas = useRef(null);
   const [payment, setPayment] = useState({
     amount_paid: '',
@@ -57,6 +66,43 @@ export default function TicketDetails() {
 
   useEffect(() => { load(); }, [id]);
 
+  // Actions linked from All Tickets must still open the secure confirmation
+  // dialog. A URL never performs a mutation by itself.
+  useEffect(() => {
+    if (loading || !ticket || String(ticket.id)!==String(id) || !isAdmin) return;
+    const intent=new URLSearchParams(search).get('action');
+    if (!['edit','cancel','delete','archive'].includes(intent)) return;
+    const effectiveStatus=effectivePaymentStatus(ticket);
+    const canReviewDelete=ticket.delete_eligible===true;
+    if (intent==='edit' && ticket.status==='unpaid') {
+      setEditOpen(true);
+    } else if (intent==='cancel' && effectiveStatus==='unpaid') {
+      setActionType('cancel');
+      setActionReason('');
+      setDeleteConfirmation('');
+      setActionError('');
+      setActionOpen(true);
+    } else if (intent==='archive') {
+      setActionType('archive');
+      setActionReason('');
+      setDeleteConfirmation('');
+      setArchiveConfirmation('');
+      setActionError('');
+      setActionOpen(true);
+    } else if (intent==='delete' && canReviewDelete) {
+      setActionType('delete');
+      setActionReason('');
+      setDeleteConfirmation('');
+      setActionError('');
+      setActionOpen(true);
+    } else {
+      setNotice({type:'error',text:'This action is restricted for the selected citation. Review its status, payments, disputes, evidence and notification history.'});
+    }
+    // Clear the intent so refreshing the page cannot repeat the action.
+    navigate(`/tickets/${id}`,{replace:true});
+  }, [ticket,loading,id,search,isAdmin,payments,evidence,navigate]);
+
+
   const publicLookupUrl = ticket?.ticket_number
     ? `${window.location.origin}/ticket-lookup?ticket=${encodeURIComponent(ticket.ticket_number)}`
     : '';
@@ -77,13 +123,50 @@ export default function TicketDetails() {
 
   const timeline = useMemo(() => Array.isArray(ticket?.timeline) ? ticket.timeline : [], [ticket]);
 
+  // UI safeguard only; the database payment RPC remains authoritative.
+  const checkPaymentDispute = async () => {
+    try {
+      return paymentDisputeDecision(await API.disputes({ticketId: id}), id);
+    } catch {
+      return {allowed:false,message:PAYMENT_DISPUTE_UNAVAILABLE};
+    }
+  };
+
+  const openPayment = async () => {
+    if (busy || !isAdmin || !ticket || ticket.status === 'cancelled') return;
+    setBusy(true);
+    try {
+      const gate = await checkPaymentDispute();
+      if (!gate.allowed) {
+        setNotice({type:'error',text:gate.message});
+        return;
+      }
+      setNotice({type:'',text:''});
+      setPaymentOpen(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const recordPayment = async () => {
     if (!payment.amount_paid || !payment.official_receipt_number.trim()) {
       setNotice({ type: 'error', text: 'Amount and official receipt number are required.' });
       return;
     }
+    if (busy) return;
+    const amount = Number(payment.amount_paid);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > Number(ticket?.remaining_balance ?? 0)) {
+      setNotice({ type: 'error', text: 'Enter a valid amount within the remaining balance.' });
+      return;
+    }
     setBusy(true);
     try {
+      const gate = await checkPaymentDispute();
+      if (!gate.allowed) {
+        setPaymentOpen(false);
+        setNotice({type:'error',text:gate.message});
+        return;
+      }
       await API.recordPayment({
         ticket_id: Number(id),
         amount_paid: Number(payment.amount_paid),
@@ -94,8 +177,8 @@ export default function TicketDetails() {
       });
       setPaymentOpen(false);
       setPayment({ amount_paid: '', official_receipt_number: '', payment_method: 'cash', payment_date: today(), notes: '' });
-      setNotice({ type: 'success', text: 'Payment recorded successfully.' });
       await load();
+      setNotice({ type: 'success', text: 'Payment recorded successfully.' });
     } catch (error) {
       setNotice({ type: 'error', text: error.message });
     } finally {
@@ -104,6 +187,7 @@ export default function TicketDetails() {
   };
 
   const saveDetails = async () => {
+    if (busy) return;
     setBusy(true);
     try {
       await API.updateTicketDetails(id, { location: edit.location.trim(), remarks: edit.remarks.trim() });
@@ -120,20 +204,38 @@ export default function TicketDetails() {
   const startAction = type => {
     setActionType(type);
     setActionReason('');
+    setDeleteConfirmation('');
+    setArchiveConfirmation('');
+    setActionError('');
     setActionOpen(true);
   };
 
   const performAdminAction = async () => {
     if (actionReason.trim().length < 5) {
-      setNotice({ type: 'error', text: 'Please provide a reason with at least 5 characters.' });
+      setActionError('Please provide a reason with at least 5 characters.');
       return;
     }
+    if (['delete','archive'].includes(actionType) && deleteConfirmation !== ticket?.ticket_number) {
+      setActionError('Type the exact citation number before deleting.');
+      return;
+    }
+    if (actionType === 'archive' && (archiveConfirmation !== 'ARCHIVE AND DELETE' || actionReason.trim().length < 10)) {
+      setActionError('Enter a reason of at least 10 characters and type ARCHIVE AND DELETE.');
+      return;
+    }
+    if (busy) return;
+    setActionError('');
     setBusy(true);
     try {
       if (actionType === 'cancel') await API.cancelTicket(id, actionReason.trim());
       if (actionType === 'unpaid') await API.markUnpaid(id, actionReason.trim());
+      if (actionType === 'archive') {
+        await API.archiveRemoveTicket(id, actionReason.trim(), deleteConfirmation, archiveConfirmation);
+        navigate('/admin/tickets', { replace: true });
+        return;
+      }
       if (actionType === 'delete') {
-        await API.permanentDeleteTicket(id, actionReason.trim());
+        await API.permanentDeleteTicket(id, actionReason.trim(), deleteConfirmation);
         navigate('/admin/tickets', { replace: true });
         return;
       }
@@ -141,7 +243,9 @@ export default function TicketDetails() {
       await load();
       setNotice({ type: 'success', text: actionType === 'cancel' ? 'Ticket cancelled.' : 'Ticket marked unpaid.' });
     } catch (error) {
-      setNotice({ type: 'error', text: error.message });
+      const detail = `${error.message || 'The server did not complete the request.'}${error.status ? ` (HTTP ${error.status})` : ''}${error.code && error.code !== 'API_ERROR' ? ` [${error.code}]` : ''}`;
+      setActionError(detail);
+      setNotice({ type: 'error', text: detail });
     } finally {
       setBusy(false);
     }
@@ -169,6 +273,23 @@ export default function TicketDetails() {
     }
   };
 
+  const retryNotification = async () => {
+    setNotificationBusy(true);
+    try {
+      const response = await API.retryTicketNotification(id);
+      const outcome = response.notification ?? response.data ?? {};
+      await load();
+      setNotice({
+        type: outcome.status === 'accepted' || outcome.status === 'already_accepted' ? 'success' : 'info',
+        text: outcome.message || 'No email notification status was returned.',
+      });
+    } catch (error) {
+      setNotice({ type: 'error', text: error.message });
+    } finally {
+      setNotificationBusy(false);
+    }
+  };
+
   const downloadEvidence = async row => {
     try {
       const blob = await API.evidenceFile(row.id);
@@ -182,25 +303,20 @@ export default function TicketDetails() {
 
   const printQr = () => {
     if (!qrCanvas.current || !ticket?.ticket_number) return;
-    const popup = window.open('', '_blank', 'noopener,noreferrer');
-    if (!popup) {
-      setNotice({ type: 'error', text: 'Allow pop-ups to print the ticket QR code.' });
-      return;
+    if (!printPublicTicketQr(qrCanvas.current, ticket.ticket_number)) {
+      setNotice({ type: 'error', text: 'The QR print view is unavailable. Refresh the citation and try printing again.' });
     }
-    popup.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Ticket QR Code</title><style>body{font-family:Arial,sans-serif;text-align:center;padding:40px;color:#0b2545}img{display:block;margin:20px auto;width:180px;height:180px}p{font-family:monospace}</style></head><body><h1>Traffic Violation Ticket</h1><p id="ticket-number"></p><img id="ticket-qr" alt="Public ticket lookup QR code"></body></html>');
-    popup.document.close();
-    popup.document.getElementById('ticket-number').textContent = ticket.ticket_number;
-    popup.document.getElementById('ticket-qr').src = qrCanvas.current.toDataURL('image/png');
-    popup.focus();
-    popup.print();
   };
 
-  if (loading && !ticket) return <><PageHeader title="Ticket Details"/><div className="card">Loading ticket…</div></>;
-  if (!ticket) return <><PageHeader title="Ticket Details"/><Notice type="error">{notice.text || 'Ticket could not be loaded.'}</Notice></>;
+  if (loading && !ticket) return <><PageHeader title="Citation Details"/><div className="card">Loading ticket…</div></>;
+  if (!ticket) return <><PageHeader title="Citation Details"/><Notice type="error">{notice.text || 'Ticket could not be loaded.'}</Notice></>;
 
   const penalty = ticket.penalty_amount_at_issue ?? ticket.penalty_amount;
-  const canEdit = ticket.status !== 'cancelled';
+  const canEdit = ticket.status === 'unpaid';
   const canRecordPayment = isAdmin && ticket.status !== 'cancelled' && Number(ticket.remaining_balance ?? penalty ?? 0) > 0;
+  const notification = ticket.notification ?? {};
+  // Only the server may declare a citation eligible. Missing/failed checks deny deletion.
+  const canDelete = isAdmin && ticket.delete_eligible === true;
 
   const timelineColumns = [
     { key: 'created_at', label: 'Date', render: row => dateTime(row.created_at) },
@@ -212,28 +328,45 @@ export default function TicketDetails() {
 
   return <div className="restored-ticket-details-page">
     <PageHeader
-      title="Ticket Details"
+      title="Citation Details"
       subtitle={`Complete citation record for ${ticket.ticket_number}.`}
-      actions={<div className="header-actions"><button className="btn btn-primary btn-sm no-print" onClick={()=>window.print()}>Print Ticket</button><button className="btn btn-secondary btn-sm no-print" onClick={()=>navigate(isAdmin?'/admin/tickets':'/officer/tickets')}>← Back to Tickets</button>{canEdit&&<button className="btn btn-secondary btn-sm no-print" onClick={()=>setEditOpen(true)}>Edit Details</button>}{isAdmin&&ticket.status!=='cancelled'&&<button className="btn btn-danger btn-sm no-print" onClick={()=>startAction('cancel')}>Cancel Ticket</button>}</div>}
+      actions={<div className="header-actions"><button className="btn btn-primary btn-sm no-print" onClick={()=>window.print()}>Print Ticket</button><button className="btn btn-secondary btn-sm no-print" onClick={()=>navigate(isAdmin?'/admin/tickets':'/officer/tickets')}>← Back to Tickets</button>{canEdit&&<button className="btn btn-secondary btn-sm no-print" onClick={()=>setEditOpen(true)}>Edit Details</button>}{isAdmin&&ticket.status==='unpaid'&&<button className="btn btn-danger btn-sm no-print" onClick={()=>startAction('cancel')}>Cancel Ticket</button>}</div>}
     />
     <Notice type={notice.type} onClose={()=>setNotice({type:'',text:''})}>{notice.text}</Notice>
 
     <section className="card ticket-detail-card">
-      <div className="ticket-document-head"><div><span className="ticket-document-kicker">MUNICIPALITY OF CALAPE · BOHOL</span><h2>VEHICLE VIOLATION TICKET</h2><p>Traffic Violation Ticketing &amp; Management System</p></div><div className="ticket-number-panel"><small>Ticket Number</small><strong>{ticket.ticket_number}</strong><StatusBadge value={ticket.status}/></div></div>
+      <div className="ticket-document-head"><div><span className="ticket-document-kicker">MUNICIPALITY OF CALAPE · BOHOL</span><h2>TRAFFIC CITATION</h2><p>Traffic Violation Ticketing &amp; Management System</p></div><div className="ticket-number-panel"><small>Citation Number</small><strong>{ticket.ticket_number}</strong><StatusBadge value={effectivePaymentStatus(ticket)}/></div></div>
 
       <div className="ticket-detail-sections">
         <section className="ticket-info-section"><div className="ticket-section-title"><span>01</span><h3>Date & Time Information</h3></div><div className="details-grid"><div><dt>Date issued</dt><dd>{dateOnly(ticket.date_issued)}</dd></div><div><dt>Time issued</dt><dd>{ticket.time_issued || '—'}</dd></div><div className="span-2"><dt>Location</dt><dd>{ticket.location || '—'}</dd></div></div></section>
 
-        <section className="ticket-info-section"><div className="ticket-section-title"><span>02</span><h3>Vehicle Information</h3></div><div className="details-grid"><div><dt>Plate number</dt><dd className="plate-value">{ticket.plate_number}</dd></div><div><dt>Vehicle type</dt><dd>{ticket.vehicle_type || '—'}</dd></div><div><dt>Driver / owner</dt><dd>{ticket.owner_name || '—'}</dd></div><div><dt>License number</dt><dd>{ticket.driver_license_number || '—'}</dd></div></div></section>
+        <section className="ticket-info-section"><div className="ticket-section-title"><span>02</span><h3>Vehicle Information</h3></div><div className="details-grid"><div><dt>Plate number</dt><dd className="plate-value">{ticket.plate_number||'Not recorded'}</dd></div><div><dt>Vehicle type</dt><dd>{ticket.vehicle_type||'Not recorded'}</dd></div><div><dt>Registered owner</dt><dd>{ticket.owner_name||'Not recorded'}</dd></div><div><dt>License number</dt><dd>{ticket.driver_license_number||'Not provided'}</dd></div></div></section>
 
-        <section className="ticket-info-section"><div className="ticket-section-title"><span>03</span><h3>Violation Information</h3></div><div className="details-grid"><div className="span-2"><dt>Violation</dt><dd>{ticket.violation_code} · {ticket.violation_name}</dd></div><div className="span-2"><dt>Remarks</dt><dd>{ticket.remarks || '—'}</dd></div></div></section>
+        <section className="ticket-info-section"><div className="ticket-section-title"><span>03</span><h3>Violation Information</h3></div><div className="details-grid"><div className="span-2"><dt>{ticket.citation_version===2?'Selected violations':'Violation'}</dt><dd>{ticket.citation_version===2?`${ticket.violations?.length??0} issued violations`:`${ticket.violation_code} · ${ticket.violation_name}`}</dd></div><div><dt>Plate Ticket Count at Issuance</dt><dd>{ticket.plate_ticket_count_at_issue??'—'}</dd></div>{ticket.citation_version!==2&&<div><dt>Legacy same-violation occurrence</dt><dd>{ticket.same_violation_offense_count_at_issue??'—'}</dd></div>}<div className="span-2"><dt>Remarks</dt><dd>{ticket.remarks || '—'}</dd></div></div></section>
 
-        <section className="ticket-info-section"><div className="ticket-section-title"><span>04</span><h3>Issued By</h3></div><div className="details-grid"><div><dt>Apprehending Officer</dt><dd>{ticket.officer_name || '—'}</dd></div><div><dt>Current Status</dt><dd><StatusBadge value={ticket.status}/></dd></div></div></section>
+        <section className="ticket-info-section"><div className="ticket-section-title"><span>04</span><h3>Issued By</h3></div><div className="details-grid"><div><dt>Apprehending Officer</dt><dd>{ticket.officer_name || '—'}</dd></div><div><dt>Current Status</dt><dd><StatusBadge value={effectivePaymentStatus(ticket)}/></dd></div></div></section>
       </div>
 
-      <div className="ticket-financial-strip"><div><span>Penalty Amount</span><strong>{money(penalty)}</strong></div><div><span>Total Paid</span><strong className="paid-value">{money(ticket.total_paid)}</strong></div><div><span>Remaining Balance</span><strong className="balance-value">{money(ticket.remaining_balance)}</strong></div></div>
+      <section className="ticket-info-section"><h3>Issued Violations</h3><CitationViolations ticket={ticket}/><p>Same-plate counts are historical monitoring information, not proof of the same driver. Revised citations use the flat penalty.</p>{ticket.legacy_penalty_recovered&&<p>Legacy penalty preserved from the catalog value available at migration; an original issue-time amount was not recorded.</p>}</section>
+      {ticket.citation_version===2&&<section className="ticket-info-section"><h3>Driver, Violation & Appearance Details</h3><div className="details-grid">{[
+        ['Cited driver',[ticket.driver_first_name,ticket.driver_middle_name,ticket.driver_last_name].filter(Boolean).join(' ')],
+        ['Driver email',ticket.driver_email_at_issue],['Driver address',ticket.driver_address],['Nationality',ticket.driver_nationality],
+        ['License classification',ticket.license_type==='Others'?ticket.license_type_other:ticket.license_type],['Vehicle make',ticket.vehicle_make_at_issue],
+        ['Registered owner address',ticket.owner_address],['Date of violation',dateOnly(ticket.incident_date)],['Time of violation',ticket.incident_time],
+        ['Supporting GPS',ticket.violation_latitude==null?'Not recorded':`${ticket.violation_latitude}, ${ticket.violation_longitude}`],
+        ['Rank / Designation at issuance',ticket.officer_rank_at_issue],['Report/appear by',dateOnly(ticket.appearance_due_date)]
+      ].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'Not recorded'}</dd></div>)}</div><p>The seven-day appearance deadline is separate from the payment and dispute deadlines.</p></section>}
+      <div className="ticket-financial-strip"><div><span>Total Citation Penalty</span><strong>{money(penalty)}</strong></div><div><span>Total Paid</span><strong className="paid-value">{money(ticket.total_paid)}</strong></div><div><span>Remaining Balance</span><strong className="balance-value">{money(ticket.remaining_balance)}</strong></div></div>
 
-      {isAdmin&&<div className="ticket-admin-actions">{ticket.status==='paid'&&<button className="btn btn-secondary" onClick={()=>startAction('unpaid')}>Mark Unpaid</button>}<button className="btn btn-ghost danger-link" onClick={()=>startAction('delete')}>Permanent Delete</button></div>}
+      {isAdmin&&<div className="ticket-admin-actions">{ticket.status==='paid'&&<button className="btn btn-secondary" onClick={()=>startAction('unpaid')}>Mark Unpaid</button>}<button className="btn btn-ghost danger-link" disabled={!canDelete} title={canDelete?'Permanently delete eligible citation':ticket.delete_block_reason || 'Deletion eligibility is unavailable. Refresh before attempting any deletion.'} onClick={()=>startAction('delete')}>Permanent Delete</button>{!canDelete&&<button className="btn btn-secondary danger-link" onClick={()=>startAction('archive')}>Archive and Remove Protected Citation</button>}</div>}
+    </section>
+
+    <section className="card no-print">
+      <div className="card-header">
+        <div><span className="section-kicker">EMAIL NOTICE</span><h3 className="card-title">Ticket Notification</h3><p>{notification.message || 'No email notification status is available.'}</p></div>
+        {notification.retryAllowed&&<button className="btn btn-secondary btn-sm" disabled={notificationBusy} onClick={retryNotification}>{notificationBusy?'Retrying…':'Retry Email'}</button>}
+      </div>
+      <div className="card-body details-grid"><div><dt>Delivery status</dt><dd><StatusBadge value={notification.status || 'not recorded'}/></dd></div><div><dt>Recipient</dt><dd>{notification.recipientMasked || 'Not available'}</dd></div></div>
     </section>
 
     <section className="card ticket-qr-card no-print">
@@ -248,7 +381,7 @@ export default function TicketDetails() {
 
     <div className="two-col ticket-support-grid">
       <section className="card">
-        <div className="card-header"><div><span className="section-kicker">SETTLEMENT</span><h3 className="card-title">Payment History</h3></div>{canRecordPayment&&<button className="btn btn-primary btn-sm" onClick={()=>setPaymentOpen(true)}>Record Payment</button>}</div>
+        <div className="card-header"><div><span className="section-kicker">SETTLEMENT</span><h3 className="card-title">Payment History</h3></div>{canRecordPayment&&<button className="btn btn-primary btn-sm" disabled={busy} onClick={openPayment}>Record Payment</button>}</div>
         <div className="card-body"><DataTable columns={[
           {key:'official_receipt_number',label:'Receipt'},
           {key:'amount_paid',label:'Amount',render:r=>money(r.amount_paid)},
@@ -268,7 +401,7 @@ export default function TicketDetails() {
       </section>
     </div>
 
-    <Modal open={paymentOpen} title="Record Payment" onClose={()=>setPaymentOpen(false)} footer={<><button className="btn btn-secondary" onClick={()=>setPaymentOpen(false)}>Cancel</button><button className="btn btn-primary" disabled={busy} onClick={recordPayment}>{busy?'Saving…':'Save Payment'}</button></>}>
+    <Modal open={paymentOpen} title="Record Payment" onClose={()=>setPaymentOpen(false)} footer={<><button className="btn btn-secondary" onClick={()=>setPaymentOpen(false)}>Cancel</button><button className="btn btn-primary" disabled={busy || !payment.official_receipt_number.trim() || !(Number(payment.amount_paid)>0)} onClick={recordPayment}>{busy?'Saving…':'Save Payment'}</button></>}>
       <div className="form-grid">
         <label className="field"><span>Amount *</span><input type="number" min="0.01" step="0.01" value={payment.amount_paid} onChange={e=>setPayment({...payment,amount_paid:e.target.value})}/></label>
         <label className="field"><span>Official receipt no. *</span><input value={payment.official_receipt_number} onChange={e=>setPayment({...payment,official_receipt_number:e.target.value})}/></label>
@@ -278,16 +411,25 @@ export default function TicketDetails() {
       </div>
     </Modal>
 
-    <Modal open={editOpen} title="Edit Ticket Details" onClose={()=>setEditOpen(false)} footer={<><button className="btn btn-secondary" onClick={()=>setEditOpen(false)}>Cancel</button><button className="btn btn-primary" disabled={busy} onClick={saveDetails}>{busy?'Saving…':'Save Changes'}</button></>}>
+    <Modal open={editOpen} title="Edit Citation Details" onClose={()=>setEditOpen(false)} footer={<><button className="btn btn-secondary" onClick={()=>setEditOpen(false)}>Cancel</button><button className="btn btn-primary" disabled={busy} onClick={saveDetails}>{busy?'Saving…':'Save Changes'}</button></>}>
       <div className="form-grid">
         <label className="field span-2"><span>Location</span><input maxLength="200" value={edit.location} onChange={e=>setEdit({...edit,location:e.target.value})}/></label>
         <label className="field span-2"><span>Remarks</span><textarea rows="5" maxLength="4000" value={edit.remarks} onChange={e=>setEdit({...edit,remarks:e.target.value})}/></label>
       </div>
     </Modal>
 
-    <Modal open={actionOpen} title={actionType==='cancel'?'Cancel Ticket':actionType==='unpaid'?'Mark Ticket Unpaid':'Permanently Delete Ticket'} onClose={()=>setActionOpen(false)} footer={<><button className="btn btn-secondary" onClick={()=>setActionOpen(false)}>Back</button><button className="btn btn-danger" disabled={busy} onClick={performAdminAction}>{busy?'Working…':actionType==='delete'?'Delete Permanently':'Confirm'}</button></>}>
-      <Notice type="error">{actionType==='delete'?'This permanently removes the ticket and its dependent records. Use only for an authorized administrative correction.':''}</Notice>
-      <label className="field"><span>Reason *</span><textarea rows="4" minLength="5" maxLength="500" value={actionReason} onChange={e=>setActionReason(e.target.value)} placeholder="Enter the reason for this administrative action."/></label>
+    <Modal open={actionOpen} title={actionType==='cancel'?'Cancel Ticket':actionType==='unpaid'?'Mark Ticket Unpaid':actionType==='archive'?'Archive and Remove Protected Citation':'Permanently Delete Ticket'} onClose={()=>setActionOpen(false)} footer={<><button className="btn btn-secondary" onClick={()=>setActionOpen(false)}>Back</button><button className="btn btn-danger" disabled={busy || actionReason.trim().length < (actionType==='archive'?10:5) || (['delete','archive'].includes(actionType) && deleteConfirmation!==ticket.ticket_number) || (actionType==='archive' && archiveConfirmation!=='ARCHIVE AND DELETE')} onClick={performAdminAction}>{busy?'Working…':actionType==='archive'?'Archive and Remove':actionType==='delete'?'Delete Permanently':'Confirm'}</button></>}>
+      {actionError&&<Notice type="error">{actionError} — The citation has not been confirmed deleted. Refresh its status before trying again.</Notice>}
+      {actionType==='archive'&&<Notice type="error">This exceptional Administrator action removes the citation from live operational tables, but preserves the entire citation, official payment ledger, disputes, evidence, history, and notification records in a restricted archive. It cannot be undone from this screen and must only be used with documented authorization.</Notice>}
+      {actionType==='delete'&&<Notice type="error">This permanently removes an eligible citation. Cancelled citations with failed email history are archived in the audit log first. Payment, dispute, evidence and delivered/uncertain email records remain protected. This cannot be undone.</Notice>}
+      <label className="field"><span>Reason * (at least 5 characters)</span><textarea rows="4" minLength="5" maxLength="500" value={actionReason} onChange={e=>setActionReason(e.target.value)} placeholder="For example: Duplicate test citation" aria-describedby="admin-action-reason-help"/></label>
+      <small id="admin-action-reason-help">{actionReason.trim().length < 5 ? 'Enter a reason of at least 5 characters to continue.' : 'Reason entered.'}</small>
+      {['delete','archive'].includes(actionType)&&<>
+        <label className="field"><span>Confirm citation number: <strong>{ticket.ticket_number}</strong> *</span><input autoComplete="off" spellCheck={false} value={deleteConfirmation} onChange={event=>setDeleteConfirmation(event.target.value)} placeholder="Type the citation number here" aria-describedby="admin-delete-number-help"/></label>
+        <small id="admin-delete-number-help">{deleteConfirmation===ticket.ticket_number ? 'Citation number confirmed.' : <>Manually type <strong>{ticket.ticket_number}</strong> in the box above. It is NOT filled automatically.</>}</small>
+        {actionType==='archive'&&<label className="field"><span>Additional confirmation: type ARCHIVE AND DELETE *</span><input autoComplete="off" spellCheck={false} value={archiveConfirmation} onChange={event=>setArchiveConfirmation(event.target.value)} placeholder="ARCHIVE AND DELETE"/></label>}
+        <p><small>{actionType==='archive'?'A complete archive and an audit entry must both be persisted before removal. Reason must be at least 10 characters.':'Ordinary deletion requires a valid reason and the exact citation number.'}</small></p>
+      </>}
     </Modal>
   </div>;
 }

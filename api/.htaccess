@@ -1,9 +1,23 @@
 Options -Indexes
 RewriteEngine On
+# Reversible release gate. Marker files are operator-created only after approval;
+# the deployment excludes them and its NO DELETE upload preserves live markers.
+RewriteCond %{DOCUMENT_ROOT}/api/.release-write-lock -f
+RewriteCond %{REQUEST_METHOD} !^(GET|HEAD|OPTIONS)$ [NC]
+RewriteCond %{HTTP_COOKIE} !(^|;\s*)tvtms_release=([a-f0-9]{64})(;|$)
+RewriteRule ^ - [R=503,L]
+RewriteCond %{DOCUMENT_ROOT}/api/.release-write-lock -f
+RewriteCond %{REQUEST_METHOD} !^(GET|HEAD|OPTIONS)$ [NC]
+RewriteCond %{HTTP_COOKIE} (^|;\s*)tvtms_release=([a-f0-9]{64})(;|$)
+RewriteCond %{DOCUMENT_ROOT}/api/.release-operator-%2 !-f
+RewriteRule ^ - [R=503,L]
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^ index.php [QSA,L]
 
 <FilesMatch "^(config\.php|config\.example\.php)$">
+  Require all denied
+</FilesMatch>
+<FilesMatch "^\.release-">
   Require all denied
 </FilesMatch>

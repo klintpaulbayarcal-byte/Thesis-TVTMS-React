@@ -4,7 +4,7 @@ import Icon from './Icon';
 
 const adminSections = [
   ['MAIN', [['/admin','Dashboard','dashboard'],['/admin/overview','Overview','overview']]],
-  ['ENFORCEMENT', [['/admin/tickets','All Tickets','ticket'],['/officer/lookup','Search Violator','search']]],
+  ['ENFORCEMENT', [['/admin/tickets','All Tickets','ticket'],['/officer/lookup','Search Ticket','search']]],
   ['MANAGEMENT', [['/admin/violations','Violations','alert'],['/admin/users','Users','users'],['/admin/payments','Payments','payment'],['/admin/disputes','Disputes','dispute']]],
   ['ANALYTICS', [['/admin/reports','Reports','report'],['/admin/analytics','Analytics','analytics']]],
   ['ADMIN TOOLS', [['/admin/audit-logs','Audit Trail','history'],['/notifications','Notifications','bell'],['/admin/settings','Settings','settings']]],
@@ -12,7 +12,7 @@ const adminSections = [
 ];
 const officerSections = [
   ['MAIN', [['/officer','Dashboard','dashboard']]],
-  ['ENFORCEMENT', [['/officer/issue-ticket','Issue Ticket','plus'],['/officer/tickets','My Tickets','ticket'],['/officer/lookup','Search Violator','search']]],
+  ['ENFORCEMENT', [['/officer/issue-ticket','Issue Traffic Citation','plus'],['/officer/tickets','My Tickets','ticket'],['/officer/lookup','Search Ticket','search']]],
   ['ACCOUNT', [['/notifications','Notifications','bell'],['/profile','My Profile','user']]],
 ];
 
