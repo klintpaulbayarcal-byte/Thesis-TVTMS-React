@@ -137,7 +137,7 @@ export default function PublicTicketLookup(){
           <div className="plate-summary-head"><h3>Plate Summary · {normalizedQuery}</h3></div>
           <div className="summary-grid">
             <div className="summary-item"><small>Historical Tickets</small><strong>{summary.historical_ticket_count??summary.total_violations??0}</strong></div>
-            <div className="summary-item"><small>Recorded Violations (Listed Citations)</small><strong>{tickets.reduce((sum,ticket)=>sum+(Array.isArray(ticket.violations)&&ticket.violations.length?ticket.violations.length:1),0)}</strong></div>
+            <div className="summary-item"><small>Violations in Listed Citations</small><strong>{tickets.reduce((sum,ticket)=>sum+(Array.isArray(ticket.violations)&&ticket.violations.length?ticket.violations.length:1),0)}</strong></div>
             <div className="summary-item"><small>Non-Cancelled Tickets</small><strong>{summary.non_cancelled_ticket_count??summary.total_violations??0}</strong></div>
             <div className="summary-item"><small>Unpaid</small><strong>{summary.unpaid_count??0}</strong></div>
             <div className="summary-item"><small>Paid</small><strong>{summary.paid_count??0}</strong></div>
