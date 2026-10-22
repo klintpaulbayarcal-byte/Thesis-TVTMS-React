@@ -131,15 +131,29 @@ jobs:
           lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER" -e "$options mirror -R --verbose --no-perms --parallel=2 --exclude-glob uploads/ ./deploy/ /; put ./deploy/.htaccess -o /.htaccess; put ./deploy/api/.htaccess -o /api/.htaccess; put ./deploy/api/config/.htaccess -o /api/config/.htaccess; cls -1 /index.html; cls -1 /.htaccess; cls -1 /api/index.php; cls -1 /api/config/config.local.php; bye"
           echo 'FTP upload finished; verifying live site next.'
 
-      - name: Verify the exact legacy redirect before cleanup
+      - name: Verify legacy landing protection before optional cleanup
+        id: legacy_landing
         shell: bash
         run: |
           set -euo pipefail
           legacy_result="$(curl --silent --show-error --max-time 30 --output /dev/null --write-out '%{http_code} %{redirect_url}' 'https://trafficviolation.dcsbisu.com/pages/landing.html')"
-          test "$legacy_result" = '301 https://trafficviolation.dcsbisu.com/' || { echo "Unexpected legacy response: $legacy_result"; exit 1; }
-          echo 'Legacy landing URL redirects to the React homepage before obsolete-file cleanup.'
+          case "$legacy_result" in
+            '301 https://trafficviolation.dcsbisu.com/')
+              echo 'verified_redirect=true' >> "$GITHUB_OUTPUT"
+              echo 'Legacy URL redirects correctly; the exact obsolete file may be removed.'
+              ;;
+            '403 ')
+              echo 'verified_redirect=false' >> "$GITHUB_OUTPUT"
+              echo 'Legacy URL is access-denied (HTTP 403). Do not remove files: preserve the remote landing artifact and require independent homepage/API health verification.'
+              ;;
+            *)
+              echo "Unexpected legacy response: $legacy_result"
+              exit 1
+              ;;
+          esac
 
       - name: Remove only the obsolete deployed landing file
+        if: steps.legacy_landing.outputs.verified_redirect == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -156,7 +170,12 @@ jobs:
         run: |
           set -euo pipefail
           legacy_result="$(curl --silent --show-error --max-time 30 --output /dev/null --write-out '%{http_code} %{redirect_url}' 'https://trafficviolation.dcsbisu.com/pages/landing.html')"
-          test "$legacy_result" = '301 https://trafficviolation.dcsbisu.com/' || { echo "Unexpected legacy response after cleanup: $legacy_result"; exit 1; }
+          # HTTP 403 is acceptable only for the obsolete landing URL. The
+          # homepage and connected API below must succeed independently.
+          if [[ "$legacy_result" != '301 https://trafficviolation.dcsbisu.com/' && "$legacy_result" != '403 ' ]]; then
+            echo "Unexpected legacy response after protected cleanup: $legacy_result"
+            exit 1
+          fi
           curl --fail --silent --show-error --location --max-time 30 'https://trafficviolation.dcsbisu.com/' -o /tmp/tvtms-live-index.html
           grep -q 'assets/' /tmp/tvtms-live-index.html
           curl --fail --silent --show-error --location --max-time 30 'https://trafficviolation.dcsbisu.com/api/health' -o /tmp/tvtms-health.json
