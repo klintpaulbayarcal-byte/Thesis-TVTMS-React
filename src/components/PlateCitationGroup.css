@@ -1,0 +1,25 @@
+.plate-citation-group{margin:14px 0;border:1px solid #d8e2ef;border-radius:12px;background:var(--card-bg,#fff);overflow:hidden;min-width:0}
+.plate-citation-group__summary{list-style:none;display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:16px 18px;cursor:pointer;background:#f5f8fc;color:#143656}
+.plate-citation-group__summary::-webkit-details-marker{display:none}
+.plate-citation-group__summary:focus-visible,.plate-citation-item>summary:focus-visible{outline:3px solid #2e76bb;outline-offset:-3px}
+.plate-citation-group__identity{display:flex;flex-direction:column;gap:4px;flex:1 1 190px}
+.plate-citation-group__identity strong{font-size:16px;overflow-wrap:anywhere}
+.plate-citation-group__identity small{font-size:12px;color:#526980}
+.plate-citation-group__counts{display:flex;gap:8px;flex-wrap:wrap}
+.plate-citation-group__counts span{font-size:12px;font-weight:700;padding:6px 9px;border:1px solid #d8e2ef;border-radius:20px;background:#fff}
+.plate-citation-group__toggle{font-size:23px;line-height:1;transition:transform .16s}
+.plate-citation-group[open]>.plate-citation-group__summary .plate-citation-group__toggle{transform:rotate(180deg)}
+.plate-citation-group__content{padding:14px 16px;min-width:0}
+.plate-citation-group__note{margin:0 0 14px;color:#536b80;font-size:13px;line-height:1.5}
+.plate-citation-item{border:1px solid #e2e9f2;border-radius:9px;margin:0 0 10px;background:#fff;overflow:hidden}
+.plate-citation-item:last-child{margin-bottom:0}
+.plate-citation-item>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:13px 14px;cursor:pointer}
+.plate-citation-item>summary::-webkit-details-marker{display:none}
+.plate-citation-item>summary strong{color:#173a5b}
+.plate-citation-item>summary span{font-size:13px;color:#526980}
+.plate-citation-item[open]>summary{background:#f8fafc;border-bottom:1px solid #e2e9f2}
+.plate-citation-item__details{padding:12px 14px;overflow-x:auto}
+.plate-citation-item__details p{margin:5px 0}
+.plate-citation-item__violations{margin:8px 0;padding-left:20px;line-height:1.6}
+.plate-citation-item__violations li{padding:2px 0;overflow-wrap:anywhere}
+@media(max-width:600px){.plate-citation-group__summary{padding:12px;gap:9px}.plate-citation-group__content{padding:10px}.plate-citation-group__counts{width:100%}.plate-citation-item>summary{padding:11px}}
