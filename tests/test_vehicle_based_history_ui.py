@@ -15,7 +15,7 @@ def test_plate_history_distinguishes_citations_and_violation_items():
     assert 'Historical Citations' in staff
     assert 'Individual Violations' in staff
     assert 'Paid Citations' in staff and 'Unpaid Citations' in staff
-    assert 'Recorded Violations (Listed Citations)' in public
-    assert 'Next Citation for This Plate' in issue
+    assert 'Violations in Listed Citations' in public
+    assert 'Plate Ticket Count at Issuance' in issue
     assert 'multiple violations' in issue
     assert 'Existing citations and all recorded violations for this vehicle plate' in issue
