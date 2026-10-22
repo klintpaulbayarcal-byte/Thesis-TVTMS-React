@@ -1,3 +1,4 @@
+import PlateCitationGroup from '../components/PlateCitationGroup';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import CitationViolations from '../components/CitationViolations';
@@ -145,7 +146,10 @@ export default function PublicTicketLookup(){
             <div className="summary-item"><small>Combined Outstanding</small><strong>{money(summary.total_outstanding_balance??summary.total_unpaid_amount)}</strong></div>
           </div>
         </div>}
-        {tickets.map(ticket=><article className={`ticket-card status-${ticket.status||'unknown'}`} key={ticket.ticket_number}>
+        {mode==='plate'&&tickets.length>0&&<PlateCitationGroup plate={normalizedQuery.replace(/[\s-]+/g,'')} citations={tickets} totalCitations={summary?.historical_ticket_count} note="Expand this vehicle once to view its individual citations, violations and dispute options.">
+        {tickets.map(ticket=><details className="plate-citation-item" key={ticket.ticket_number}><summary><strong>Citation {ticket.ticket_number}</strong><span>{dateOnly(ticket.date_issued)} · {ticket.violations?.length||1} violation(s) · {money(ticket.penalty_amount)}</span></summary><div className="plate-citation-item__details"><CitationViolations ticket={ticket} publicView/><p>Paid: {money(ticket.total_paid)} · Balance: {money(ticket.remaining_balance)}</p><p>Status: {ticket.payment_status??ticket.status}</p>{canFilePublicDispute(ticket)?<button type="button" className="dispute-trigger" disabled={disputeSubmitting} onClick={()=>openDispute(ticket)}>File a Dispute</button>:<p>{ticket.dispute_message||'Dispute unavailable for this ticket.'}</p>}</div></details>)}
+        </PlateCitationGroup>}
+        {mode==='ticket'&&tickets.map(ticket=><article className={`ticket-card status-${ticket.status||'unknown'}`} key={ticket.ticket_number}>
           <div className="ticket-header"><div><small>Citation Number</small><h3>{ticket.ticket_number}</h3></div><StatusBadge value={ticket.payment_status??ticket.status}/></div>
           <dl className="details-grid">
             <div><dt>Date issued</dt><dd>{dateOnly(ticket.date_issued)}</dd></div><div><dt>Plate number</dt><dd>{ticket.plate_number||'—'}</dd></div>
