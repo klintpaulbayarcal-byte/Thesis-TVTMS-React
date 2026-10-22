@@ -131,7 +131,7 @@ jobs:
           lftp -u "$FTP_USERNAME,$FTP_PASSWORD" -p 21 "$FTP_SERVER" -e "$options mirror -R --verbose --no-perms --parallel=2 --exclude-glob uploads/ ./deploy/ /; put ./deploy/.htaccess -o /.htaccess; put ./deploy/api/.htaccess -o /api/.htaccess; put ./deploy/api/config/.htaccess -o /api/config/.htaccess; cls -1 /index.html; cls -1 /.htaccess; cls -1 /api/index.php; cls -1 /api/config/config.local.php; bye"
           echo 'FTP upload finished; verifying live site next.'
 
-      - name: Verify legacy landing protection before optional cleanup
+      - name: Verify the exact legacy redirect before cleanup
         id: legacy_landing
         shell: bash
         run: |
