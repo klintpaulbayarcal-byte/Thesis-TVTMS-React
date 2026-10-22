@@ -1,3 +1,5 @@
+import PlateCitationGroup from '../components/PlateCitationGroup';
+import { groupCitationsByPlate } from '../utils/plateCitationGroups';
 import { effectivePaymentStatus } from '../utils/paymentStatus';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -12,6 +14,7 @@ import { csvCell } from '../utils/csv';
 
 export default function ViewTickets(){
   const [rows,setRows]=useState([]);
+  const [groupByPlate,setGroupByPlate]=useState(true);
   const [filters,setFilters]=useState({search:'',status:''});
   const [query,setQuery]=useState({search:'',status:'',page:1,pageSize:50});
   const [pagination,setPagination]=useState({page:1,pageSize:50,total:0,totalPages:1});
@@ -76,6 +79,17 @@ export default function ViewTickets(){
     <div className="filter-section"><form onSubmit={submit}><div className="filter-group"><div className="form-group filter-search-wide"><label>Search Tickets</label><input placeholder="Ticket, plate, owner…" value={filters.search} onChange={event=>setFilters({...filters,search:event.target.value})}/></div><div className="form-group"><label>Status</label><select value={filters.status} onChange={event=>setFilters({...filters,status:event.target.value})}><option value="">All Status</option><option value="unpaid">Unpaid</option><option value="paid">Paid</option><option value="cancelled">Cancelled</option></select></div><div className="form-group filter-buttons"><label>&nbsp;</label><button className="btn btn-primary"><Icon name="search"/> Apply Filters</button></div><div className="form-group filter-buttons"><label>&nbsp;</label><button type="button" className="btn btn-secondary" onClick={reset}>Reset</button></div></div></form></div>
     <div className="action-buttons">{user?.role==='apprehending_officer'&&<Link to="/officer/issue-ticket" className="btn btn-primary"><Icon name="plus"/> Issue Traffic Citation</Link>}<button type="button" className="btn btn-secondary" disabled={loading||rows.length===0} onClick={exportCsv} title="Exports citations displayed on the current page only">Export Current Page CSV</button><span className="ticket-scope-note">{admin?'Administrator · Manage all existing citations':'Officer ticket view'}</span></div>
     <Notice type="error">{error}</Notice>
-    <section className="card"><div className="card-header"><h3 className="card-title">All Violation Tickets</h3></div><div className="card-body"><DataTable columns={columns} rows={rows} loading={loading} onRowClick={row=>navigate(`/tickets/${row.id}`)}/><div className="ticket-pagination" style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,flexWrap:'wrap',marginTop:16}}><span role="status">Page {pagination.page} of {pagination.totalPages} · {pagination.total} matching citations</span><div style={{display:'flex',gap:8}}><button type="button" className="btn btn-secondary btn-sm" disabled={loading||query.page<=1} onClick={()=>changePage(query.page-1)}>Previous</button><button type="button" className="btn btn-secondary btn-sm" disabled={loading||query.page>=pagination.totalPages} onClick={()=>changePage(query.page+1)}>Next</button></div></div></div></section>
+    <label className="ticket-group-toggle" style={{display:'flex',alignItems:'center',gap:8,marginBottom:14}}><input type="checkbox" checked={groupByPlate} onChange={event=>setGroupByPlate(event.target.checked)}/> Group by vehicle plate (current page)</label>
+    <section className="card"><div className="card-header"><h3 className="card-title">All Violation Tickets</h3></div><div className="card-body">{groupByPlate&&!loading?groupCitationsByPlate(rows).map((group,index)=><PlateCitationGroup key={group.plate||index} plate={group.plate} citations={group.citations} note="Grouped only for display on this page. Each citation remains a separate record.">
+       {group.citations.map(row=><details className="plate-citation-item" key={row.id??row.ticket_number}>
+         <summary><strong>Citation {row.ticket_number}</strong><span>{dateOnly(row.date_issued)} · {money(row.penalty_amount)} · {effectivePaymentStatus(row)}</span></summary>
+         <div className="plate-citation-item__details">
+           <ul className="plate-citation-item__violations">{(row.violations?.length?row.violations:[{violation_name:row.violation_name,penalty_amount:row.penalty_amount}]).map((v,i)=><li key={v.violation_id??i}>{v.violation_name} · {money(v.penalty_amount)}</li>)}</ul>
+           <p>Registered owner at issuance: {row.owner_name||'Not recorded'}</p>
+           {actionCell(row)}
+         </div>
+       </details>)}
+     </PlateCitationGroup>):<DataTable columns={columns} rows={rows} loading={loading} onRowClick={row=>navigate(`/tickets/${row.id}`)}/>}
+     {groupByPlate&&<p className="ticket-scope-note">Vehicles are grouped within the current page only; pagination and CSV still work with individual citations.</p>}<div className="ticket-pagination" style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,flexWrap:'wrap',marginTop:16}}><span role="status">Page {pagination.page} of {pagination.totalPages} · {pagination.total} matching citations</span><div style={{display:'flex',gap:8}}><button type="button" className="btn btn-secondary btn-sm" disabled={loading||query.page<=1} onClick={()=>changePage(query.page-1)}>Previous</button><button type="button" className="btn btn-secondary btn-sm" disabled={loading||query.page>=pagination.totalPages} onClick={()=>changePage(query.page+1)}>Next</button></div></div></div></section>
   </div>;
 }
