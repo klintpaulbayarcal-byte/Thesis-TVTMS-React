@@ -259,7 +259,7 @@ export default function IssueTicket() {
             {field('owner_address', 'Owner Address', { maxLength: 2000 })}
           </div>
           {history && <div className="plate-history-context"><div className="plate-context-metrics">
-            <div><span>Next Citation for This Plate</span><strong>{nextPlateTicketCount}</strong></div>
+            <div><span>Plate Ticket Count at Issuance</span><strong>{nextPlateTicketCount}</strong></div>
             <div><span>Outstanding Balance for This Plate</span><strong>{money(plateOutstanding)}</strong></div>
           </div><p>Existing citations remain linked to this vehicle plate. A new citation receives its own number and can contain multiple violations. Plate history does not prove the same person was driving.</p></div>}
           {historyItems.length > 0 && <div className="issue-history"><div className="table-wrap"><table><caption>Existing citations and all recorded violations for this vehicle plate</caption><thead><tr>
