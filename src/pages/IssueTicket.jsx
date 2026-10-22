@@ -261,8 +261,8 @@ export default function IssueTicket() {
           {history && <div className="plate-history-context"><div className="plate-context-metrics">
             <div><span>Plate Ticket Count at Issuance</span><strong>{nextPlateTicketCount}</strong></div>
             <div><span>Current Plate Outstanding</span><strong>{money(plateOutstanding)}</strong></div>
-          </div><p>Plate history does not prove the same owner or driver, or repeat offending by a person.</p></div>}
-          {historyItems.length > 0 && <div className="issue-history"><div className="table-wrap"><table><caption>Existing citations for this plate</caption><thead><tr>
+          </div><p>Existing citations remain linked to this vehicle plate. A new citation receives its own number and can contain multiple violations. Plate history does not prove the same owner or driver, or repeat offending by a person.</p></div>}
+          {historyItems.length > 0 && <div className="issue-history"><div className="table-wrap"><table><caption>Existing citations and all recorded violations for this vehicle plate</caption><thead><tr>
             <th>Citation</th><th>Violations</th><th>Penalty</th><th>Paid</th><th>Balance</th><th>Status</th>
           </tr></thead><tbody>{historyItems.map(item => <tr key={item.id ?? item.ticket_number}>
             <td>{item.ticket_number}</td><td>{item.violations?.map(v => v.violation_name).join('; ') || item.violation_name}</td>

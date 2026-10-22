@@ -129,12 +129,12 @@ export default function LicensePlateLookup(){
 
       <section className="lookup-section"><div className="section-title"><Icon name="analytics"/> Plate Ticket Summary</div><div className="summary-cards">
         <div className="summary-card"><div className="card-label">Historical Citations</div><div className="card-value">{stats?.historical_ticket_count??violations.length}</div></div><div className="summary-card"><div className="card-label">Individual Violations</div><div className="card-value">{violations.reduce((sum,item)=>sum+(Array.isArray(item.violations)&&item.violations.length?item.violations.length:1),0)}</div></div>
-        <div className="summary-card paid"><div className="card-label">Paid Violations</div><div className="card-value">{stats?.paid_count??0}</div></div>
-        <div className="summary-card unpaid"><div className="card-label">Unpaid Violations</div><div className="card-value">{stats?.unpaid_count??0}</div></div>
+        <div className="summary-card paid"><div className="card-label">Paid Citations</div><div className="card-value">{stats?.paid_count??0}</div></div>
+        <div className="summary-card unpaid"><div className="card-label">Unpaid Citations</div><div className="card-value">{stats?.unpaid_count??0}</div></div>
         <div className="summary-card"><div className="card-label">Total Outstanding</div><div className="card-value">{money(stats?.outstanding_balance)}</div></div>
       </div></section>
 
-      <section className="lookup-section"><div className="section-title"><Icon name="history"/> Plate Citation History</div><p className="lookup-helper">Plate history is vehicle history and does not by itself prove that the same person was driving.</p><DataTable columns={historyColumns} rows={violations} onRowClick={row=>row.id&&navigate(`/tickets/${row.id}`)}/></section>
+      <section className="lookup-section"><div className="section-title"><Icon name="history"/> Plate Citation History</div><p className="lookup-helper">All listed citations belong to this vehicle plate. Each citation can contain multiple violations; plate history does not prove the same person was driving.</p><DataTable columns={historyColumns} rows={violations} onRowClick={row=>row.id&&navigate(`/tickets/${row.id}`)}/></section>
     </div>}
   </div>;
 }
