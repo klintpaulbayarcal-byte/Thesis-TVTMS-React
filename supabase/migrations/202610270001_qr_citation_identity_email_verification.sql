@@ -53,7 +53,7 @@ begin
  recipient:=lower(trim(case when citation.citation_version=2
   then coalesce(citation.driver_email_at_issue,'') else coalesce(citation.owner_email_at_issue,'') end));
  -- Never fall back to mutable vehicle/owner email data.
- if recipient !~* '^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+
+ if recipient !~* '^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$' then
   return jsonb_build_object('errorCode','IDENTITY_VERIFICATION_UNAVAILABLE',
    'message','Email verification is unavailable for this citation. Contact the issuing office.','statusCode',409);
  end if;
