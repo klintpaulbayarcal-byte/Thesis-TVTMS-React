@@ -137,6 +137,18 @@ function tickets_list(array $params=[]): never
     ok('Tickets fetched successfully',$tickets,['tickets'=>$tickets,'pagination'=>$pagination]);
 }
 
+function tickets_get_qr_link(array $params): never
+{
+    $u=require_role(['admin','apprehending_officer']);
+    $id=ticket_valid_id($params['id']??0);
+    $rows=supabase_select('tickets',['id'=>'eq.'.$id],['select'=>'id,user_id,ticket_number','limit'=>1]);
+    $record=$rows[0]??null;
+    if(!$record)fail('Citation not found.',404,'TICKET_NOT_FOUND');
+    if($u['role']==='apprehending_officer'&&(int)$record['user_id']!==(int)$u['id'])fail('Access denied.',403,'TICKET_ACCESS_DENIED');
+    header('Cache-Control: no-store');
+    json_response(['success'=>true,'url'=>ticket_qr_url((string)$record['ticket_number'])]);
+}
+
 function tickets_get_one(array $params): never
 {
     $u=require_role(['admin','apprehending_officer']);$id=ticket_valid_id($params['id']??0);
