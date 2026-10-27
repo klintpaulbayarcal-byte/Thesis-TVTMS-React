@@ -149,6 +149,7 @@ export const API = {
 
   tickets: (filters, options) => apiRequest(`/tickets${qs(filters) ? `?${qs(filters)}` : ''}`, options),
   ticket: id => apiRequest(`/tickets/${id}`),
+  ticketQrLink: id => apiRequest(`/tickets/${id}/qr-link`),
   citationContext: () => apiRequest('/tickets/issuance-context'),
   createTicket: data => apiRequest('/tickets', { method: 'POST', body: JSON.stringify(data) }),
   retryTicketNotification: (id, data) => {
