@@ -209,6 +209,7 @@ export const API = {
   publicStats: () => apiRequest('/public/stats'),
   publicViolations: () => apiRequest('/public/violations'),
   publicTicketLookup: filters => apiRequest(`/public/ticket-lookup?${qs(filters)}`),
+  publicQrIdentity: (ticket,qr) => apiRequest(`/public/qr-identity?${qs({ticket,qr})}`),
   publicVehicleLookup: plateNumber => apiRequest(`/public/vehicle-lookup?${qs({ plateNumber })}`),
   publicPlateSummary: plateNumber => apiRequest(`/public/plate-summary?${qs({ plateNumber })}`),
   publicIdentityRequest: data => apiRequest('/public/identity/request', { method: 'POST', body: JSON.stringify(data) }),
