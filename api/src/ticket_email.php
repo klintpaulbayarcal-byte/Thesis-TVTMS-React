@@ -20,7 +20,7 @@ function ticket_notification_message(array $claim): array
     $plate=(string)($claim['plateNumber']??'');
     $penalty=number_format((float)($claim['penaltyAmount']??0),2);
     $base=rtrim((string)(app_config()['app_public_url']??'https://trafficviolation.dcsbisu.com'),'/');
-    $link=$base.'/ticket-lookup?ticket='.rawurlencode($ticket);
+    $link=ticket_qr_url($ticket);
     $e=static fn(string $value): string=>htmlspecialchars($value,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8');
     $lines='';
     foreach(($claim['violations']??[]) as $item){
