@@ -114,6 +114,7 @@ export default function TicketDetails() {
     return()=>{active=false;};
   },[ticket?.id,ticket?.ticket_number]);
 
+  // QR URL starts with /ticket-lookup?ticket=; its signed value is supplied by the server.
   const publicLookupUrl = signedQrUrl;
 
   useEffect(() => {
