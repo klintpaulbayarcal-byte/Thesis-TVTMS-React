@@ -16,7 +16,7 @@ def attempt(snapshot='confirmed@example.test', claim_recipient='confirmed@exampl
              'plateNumber': 'ABC1234', 'violationName': 'Illegal Parking',
              'penaltyAmount': 500, 'attemptCount': 1}
     script = '''$calls=[];$mail=[];
-function app_config():array{return ['app_public_url'=>'https://example.test'];}
+function app_config():array{return ['app_public_url'=>'https://example.test','token_secret'=>str_repeat('z',32)];}
 function mask_email(string $email):?string{return 'masked';}
 function rpc_domain_error(mixed $value):?array{return null;}
 function supabase_select(string $table,array $filters=[],array $options=[]):array{
