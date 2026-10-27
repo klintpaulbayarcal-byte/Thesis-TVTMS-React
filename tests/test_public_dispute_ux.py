@@ -40,7 +40,9 @@ def test_reason_is_enabled_for_eligible_selection_without_email_or_otp():
     source = PAGE.read_text(encoding='utf-8')
     assert 'has_notification_email' not in source
     assert 'verificationCode' not in source
-    assert 'challengeToken' not in source
+    # Identity viewing has its own OTP; the dispute submit handler remains OTP-free.
+    dispute_handler = source.split('const dispute=async event=>{', 1)[1].split('  const requestIdentity=', 1)[0] if '  const requestIdentity=' in source.split('const dispute=async event=>{', 1)[1] else source.split('const dispute=async event=>{', 1)[1].split('  return <main', 1)[0]
+    assert 'challengeToken' not in dispute_handler
     assert 'required disabled={disputeSubmitting} value={reason}' in source
     assert 'API.publicDispute({ticketNumber:selected.ticket_number,plateNumber:selected.plate_number,reason:reason.trim()})' in source
     assert 'disputePlate' not in source

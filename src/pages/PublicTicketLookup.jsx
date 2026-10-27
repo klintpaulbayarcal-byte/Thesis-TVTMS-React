@@ -20,6 +20,11 @@ export default function PublicTicketLookup(){
   const [query,setQuery]=useState(referenceFromUrl);
   const [tickets,setTickets]=useState([]);
   const [summary,setSummary]=useState(null);
+  const [identityChallenge,setIdentityChallenge]=useState(null);
+  const [identityCode,setIdentityCode]=useState('');
+  const [identityName,setIdentityName]=useState(null);
+  const [identityBusy,setIdentityBusy]=useState(false);
+  const [identityMessage,setIdentityMessage]=useState('');
   const [notice,setNotice]=useState({type:'',text:''});
   const [busy,setBusy]=useState(false);
   const [selected,setSelected]=useState(null);
@@ -29,9 +34,10 @@ export default function PublicTicketLookup(){
   const disputeInFlight=useRef(false);
   const normalizedQuery=useMemo(()=>query.toUpperCase(),[query]);
 
+  const resetIdentity=()=>{setIdentityChallenge(null);setIdentityCode('');setIdentityName(null);setIdentityMessage('');};
   const resetDispute=(clearSelection=true)=>{if(clearSelection)setSelected(null);setReason('');setDisputeNotice({type:'',text:''});};
 
-  const switchMode=(next)=>{setMode(next);setQuery('');setTickets([]);setSummary(null);resetDispute();setNotice({type:'',text:''});};
+  const switchMode=(next)=>{resetIdentity();setMode(next);setQuery('');setTickets([]);setSummary(null);resetDispute();setNotice({type:'',text:''});};
 
   const runLookup=async (reference,lookupMode)=>{
     const requestVersion=++lookupVersion.current;
@@ -40,7 +46,7 @@ export default function PublicTicketLookup(){
       setNotice({type:'error',text:'Enter a valid reference (2–30 characters).'});
       return;
     }
-    setBusy(true);setNotice({type:'',text:''});setTickets([]);setSummary(null);resetDispute();
+    resetIdentity();setBusy(true);setNotice({type:'',text:''});setTickets([]);setSummary(null);resetDispute();
     try{
       const filters=lookupMode==='plate'?{plateNumber:value}:{ticketNumber:value};
       const r=await API.publicTicketLookup(filters);
@@ -72,6 +78,30 @@ export default function PublicTicketLookup(){
     void runLookup(referenceFromUrl,modeFromUrl);
   },[referenceFromUrl,modeFromUrl]);
 
+  const requestIdentity=async(ticket)=>{
+    if(identityBusy)return;
+    setIdentityBusy(true);setIdentityMessage('');setIdentityName(null);setIdentityCode('');setIdentityChallenge(null);
+    try{
+      const result=await API.publicIdentityRequest({ticket_number:ticket.ticket_number});
+      setIdentityChallenge({token:result.challengeToken,ticketNumber:ticket.ticket_number,masked:result.recipientMasked});
+      setIdentityMessage('A six-digit verification code was sent to the citation email. Email acceptance does not guarantee delivery.');
+    }catch(error){setIdentityMessage(error.message||'Unable to send verification code.');}
+    finally{setIdentityBusy(false);}
+  };
+  const verifyIdentity=async(event)=>{
+    event.preventDefault();
+    if(!identityChallenge||identityBusy||!/^[0-9]{6}$/.test(identityCode))return;
+    setIdentityBusy(true);setIdentityMessage('');
+    try{
+      const result=await API.publicIdentityVerify({ticket_number:identityChallenge.ticketNumber,challenge_token:identityChallenge.token,code:identityCode});
+      if(result.verified){
+        setIdentityName({ticketNumber:identityChallenge.ticketNumber,driver:result.citedDriverName,owner:result.registeredOwnerName});
+        setIdentityChallenge(null);setIdentityCode('');
+        setIdentityMessage('Citation identity verified. This view is temporary and will be cleared when you search again.');
+      }
+    }catch(error){setIdentityMessage(error.message||'Incorrect or expired code.');}
+    finally{setIdentityBusy(false);}
+  };
   const openDispute=ticket=>{
     if(!canFilePublicDispute(ticket)||disputeSubmitting)return;
     resetDispute(false);setSelected(ticket);
@@ -164,6 +194,20 @@ export default function PublicTicketLookup(){
                   ? `Deadline: ${dateOnly(ticket.dispute_deadline_date)}`
                   : 'Not available'}</dd></div>
           </dl>
+          <section className="card" style={{marginTop:16,padding:16}} aria-label="Verified citation identity">
+            <h3>Verify Citation Identity</h3>
+            <p>To protect personal information, the cited driver's and registered owner's full names are available only after an email verification code. The code is sent to the email recorded when this citation was issued.</p>
+            {identityName?.ticketNumber===ticket.ticket_number
+              ? <dl className="details-grid"><div><dt>Cited Driver</dt><dd>{identityName.driver}</dd></div><div><dt>Registered Owner</dt><dd>{identityName.owner}</dd></div></dl>
+              : <><button className="btn btn-secondary" type="button" disabled={identityBusy} onClick={()=>requestIdentity(ticket)}>Send Verification Code</button>
+                {identityChallenge?.ticketNumber===ticket.ticket_number&&<form onSubmit={verifyIdentity} style={{marginTop:12}}>
+                  <label htmlFor="identityCode">Six-digit code sent to {identityChallenge.masked||'the recorded email'}</label>
+                  <input id="identityCode" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength="6" required value={identityCode} onChange={e=>setIdentityCode(e.target.value.replace(/[^0-9]/g,''))}/>
+                  <button className="btn btn-primary" type="submit" disabled={identityBusy||identityCode.length!==6}>Verify and Show Names</button>
+                </form>}
+              </>}
+            {identityMessage&&<p role="status">{identityMessage}</p>}
+          </section>
           <CitationViolations ticket={ticket} publicView/>
           {canFilePublicDispute(ticket)?<><Notice type="info">Online dispute filing is available through {dateOnly(ticket.dispute_deadline_date)}. Eligibility is evaluated using Asia/Manila dates.</Notice><button type="button" className="dispute-trigger" disabled={disputeSubmitting} onClick={()=>openDispute(ticket)}>File a Dispute</button></>:<div className="dispute-ineligible"><strong>Dispute unavailable for this ticket.</strong><Notice type="info">{ticket.dispute_message||'This ticket is not eligible for a dispute.'}</Notice><p>If you need clarification, please contact the issuing office.</p></div>}
         </article>)}
