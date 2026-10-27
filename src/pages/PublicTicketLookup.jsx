@@ -223,7 +223,6 @@ export default function PublicTicketLookup(){
               </>}
             {identityMessage&&<p role="status">{identityMessage}</p>}
           </section>}
-          {qrIdentity?.ticketNumber!==ticket.ticket_number&&null}
           <CitationViolations ticket={ticket} publicView/>
           {canFilePublicDispute(ticket)?<><Notice type="info">Online dispute filing is available through {dateOnly(ticket.dispute_deadline_date)}. Eligibility is evaluated using Asia/Manila dates.</Notice><button type="button" className="dispute-trigger" disabled={disputeSubmitting} onClick={()=>openDispute(ticket)}>File a Dispute</button></>:<div className="dispute-ineligible"><strong>Dispute unavailable for this ticket.</strong><Notice type="info">{ticket.dispute_message||'This ticket is not eligible for a dispute.'}</Notice><p>If you need clarification, please contact the issuing office.</p></div>}
         </article>)}
