@@ -41,7 +41,7 @@ def test_ticket_detail_exposes_supported_server_workflows():
 def test_ticket_issue_requires_review_before_single_create_request():
     page = text('src/pages/IssueTicket.jsx')
     assert 'reviewOpen' in page
-    assert 'Confirm and Issue Ticket' in page
+    assert 'Issue Traffic Citation' in page
     assert 'API.createTicket' in page
     assert page.count('API.createTicket') == 1, 'Review flow must have one ticket creation call site'
 
