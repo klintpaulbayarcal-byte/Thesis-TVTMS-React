@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/qr_code.php';
+require_once __DIR__ . '/qr_identity_link.php';
 
 function ticket_notification_result(string $status,?string $masked,bool $retryAllowed,string $message,array $extra=[]): array
 {
