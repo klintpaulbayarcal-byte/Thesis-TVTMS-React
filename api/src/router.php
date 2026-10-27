@@ -99,6 +99,7 @@ function api_routes(): array
         ['GET', '#^/api/public/stats/?$#', 'public_stats'],
         ['GET', '#^/api/public/violations/?$#', 'public_violations'],
         ['GET', '#^/api/public/ticket-lookup/?$#', 'public_ticket_lookup'],
+        ['GET', '#^/api/public/qr-identity/?$#', 'public_qr_identity'],
         ['GET', '#^/api/public/vehicle-lookup/?$#', 'public_vehicle_lookup'],
         ['GET', '#^/api/public/plate-summary/?$#', 'public_plate_summary'],
         ['POST', '#^/api/public/identity/request/?$#', 'qr_identity_request'],
