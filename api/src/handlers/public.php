@@ -27,6 +27,25 @@ function public_dispute_eligibility_message(array $ticket,?DateTimeImmutable $to
     return $age>$deadline?'The '.$deadline.'-day dispute period has ended.':'';
 }
 
+function public_qr_identity(array $params=[]): never
+{
+    header('Cache-Control: no-store');
+    $ticket=strtoupper(trim((string)($_GET['ticket']??'')));
+    $signature=$_GET['qr']??null;
+    if(!preg_match('/^[A-Z0-9][A-Z0-9\\/-]{0,29}$/D',$ticket)
+      || !ticket_qr_authorized($ticket,$signature))fail('Secure citation QR link is invalid.',403,'INVALID_QR_LINK');
+    $rows=supabase_select('tickets',['ticket_number'=>'eq.'.$ticket],
+      ['select'=>'ticket_number,driver_first_name,driver_middle_name,driver_last_name,owner_name_at_issue','limit'=>1]);
+    $record=$rows[0]??null;
+    if(!$record)fail('Citation not found.',404,'TICKET_NOT_FOUND');
+    $name=trim(implode(' ',array_filter([
+      $record['driver_first_name']??null,$record['driver_middle_name']??null,$record['driver_last_name']??null
+    ],static fn($part)=>is_string($part)&&trim($part)!=='')));
+    json_response(['success'=>true,'ticketNumber'=>$ticket,
+      'citedDriverName'=>$name!==''?$name:'Not recorded',
+      'registeredOwnerName'=>trim((string)($record['owner_name_at_issue']??''))?:'Not recorded']);
+}
+
 function public_ticket_lookup(array $params=[]): never
 {
     $plate=normalize_plate($_GET['plate_number']??$_GET['plateNumber']??$_GET['plate']??'');$ticket=strtoupper(trim((string)($_GET['ticket_number']??$_GET['ticketNumber']??$_GET['ticket']??'')));
