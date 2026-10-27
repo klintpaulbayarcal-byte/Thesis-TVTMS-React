@@ -37,6 +37,7 @@ export default function TicketDetails() {
   const [busy, setBusy] = useState(false);
   const [notificationBusy, setNotificationBusy] = useState(false);
   const qrCanvas = useRef(null);
+  const [signedQrUrl,setSignedQrUrl]=useState('');
   const [payment, setPayment] = useState({
     amount_paid: '',
     official_receipt_number: '',
@@ -103,9 +104,17 @@ export default function TicketDetails() {
   }, [ticket,loading,id,search,isAdmin,payments,evidence,navigate]);
 
 
-  const publicLookupUrl = ticket?.ticket_number
-    ? `${window.location.origin}/ticket-lookup?ticket=${encodeURIComponent(ticket.ticket_number)}`
-    : '';
+  useEffect(()=>{
+    let active=true;
+    setSignedQrUrl('');
+    if(!ticket?.id)return;
+    API.ticketQrLink(ticket.id).then(response=>{
+      if(active)setSignedQrUrl(response.url||'');
+    }).catch(()=>{if(active)setSignedQrUrl('');});
+    return()=>{active=false;};
+  },[ticket?.id,ticket?.ticket_number]);
+
+  const publicLookupUrl = signedQrUrl;
 
   useEffect(() => {
     if (!qrCanvas.current || !publicLookupUrl) return undefined;
@@ -302,7 +311,7 @@ export default function TicketDetails() {
   };
 
   const printQr = () => {
-    if (!qrCanvas.current || !ticket?.ticket_number) return;
+    if (!qrCanvas.current || !ticket?.ticket_number || !signedQrUrl) return;
     if (!printPublicTicketQr(qrCanvas.current, ticket.ticket_number)) {
       setNotice({ type: 'error', text: 'The QR print view is unavailable. Refresh the citation and try printing again.' });
     }
@@ -371,7 +380,7 @@ export default function TicketDetails() {
 
     <section className="card ticket-qr-card no-print">
       <div className="card-header"><div><span className="section-kicker">PUBLIC ACCESS</span><h3 className="card-title">Ticket QR Code</h3><p>Scans to the public ticket lookup using the ticket number only.</p></div><button className="btn btn-secondary btn-sm" onClick={printQr}>Print QR Code</button></div>
-      <div className="card-body ticket-qr-body"><canvas ref={qrCanvas} aria-label={`Public lookup QR code for ${ticket.ticket_number}`} /><code>{publicLookupUrl}</code></div>
+      <div className="card-body ticket-qr-body"><canvas ref={qrCanvas} aria-label={`Public lookup QR code for ${ticket.ticket_number}`} /><code>{publicLookupUrl || 'Preparing secure QR…'}</code></div>
     </section>
 
     <section className="card ticket-timeline-card">
