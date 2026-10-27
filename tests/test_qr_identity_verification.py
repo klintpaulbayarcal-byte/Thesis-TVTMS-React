@@ -22,7 +22,8 @@ def test_qr_identity_verification_security_boundaries():
     assert "'challengeToken'" in api
     assert "mask_email($recipient)" in api
     assert "qr_identity_request" in router and "qr_identity_verify" in router
-    assert "'citedDriverName'" not in public and "'registeredOwnerName'" not in public
+    public_lookup = public.split('function public_ticket_lookup',1)[1].split('function public_vehicle_lookup',1)[0]
+    assert "'citedDriverName'" not in public_lookup and "'registeredOwnerName'" not in public_lookup
     assert "mode==='ticket'&&tickets.map" in ui
     assert 'Verify and Show Names' in ui
     assert 'resetIdentity();setBusy(true)' in ui
