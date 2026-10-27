@@ -11,6 +11,7 @@ import { canFilePublicDispute } from '../utils/publicDispute';
 export default function PublicTicketLookup(){
   const [searchParams]=useSearchParams();
   const ticketFromUrl=(searchParams.get('ticket')||'').trim().toUpperCase();
+  const qrSignature=(searchParams.get('qr')||'').trim();
   const plateFromUrl=(searchParams.get('plate')||'').trim().toUpperCase();
   const referenceFromUrl=ticketFromUrl||plateFromUrl;
   const modeFromUrl=ticketFromUrl?'ticket':'plate';
@@ -25,6 +26,7 @@ export default function PublicTicketLookup(){
   const [identityName,setIdentityName]=useState(null);
   const [identityBusy,setIdentityBusy]=useState(false);
   const [identityMessage,setIdentityMessage]=useState('');
+  const [qrIdentity,setQrIdentity]=useState(null);
   const [notice,setNotice]=useState({type:'',text:''});
   const [busy,setBusy]=useState(false);
   const [selected,setSelected]=useState(null);
@@ -34,7 +36,7 @@ export default function PublicTicketLookup(){
   const disputeInFlight=useRef(false);
   const normalizedQuery=useMemo(()=>query.toUpperCase(),[query]);
 
-  const resetIdentity=()=>{setIdentityChallenge(null);setIdentityCode('');setIdentityName(null);setIdentityMessage('');};
+  const resetIdentity=()=>{setIdentityChallenge(null);setIdentityCode('');setIdentityName(null);setIdentityMessage('');setQrIdentity(null);};
   const resetDispute=(clearSelection=true)=>{if(clearSelection)setSelected(null);setReason('');setDisputeNotice({type:'',text:''});};
 
   const switchMode=(next)=>{resetIdentity();setMode(next);setQuery('');setTickets([]);setSummary(null);resetDispute();setNotice({type:'',text:''});};
@@ -53,6 +55,14 @@ export default function PublicTicketLookup(){
       const rows=Array.isArray(r.tickets)?r.tickets:(Array.isArray(r.data)?r.data:[]);
       if(requestVersion!==lookupVersion.current)return;
       setTickets(rows);
+      if(lookupMode==='ticket' && qrSignature && value===ticketFromUrl && rows.some(row=>row.ticket_number===value)){
+        try {
+          const identity=await API.publicQrIdentity(value,qrSignature);
+          if(requestVersion===lookupVersion.current)setQrIdentity(identity);
+        } catch {
+          if(requestVersion===lookupVersion.current)setIdentityMessage('This QR link is not verified. Basic citation details remain available. Contact the issuing office for identity confirmation.');
+        }
+      }
       if(lookupMode==='plate'){
         try{const plate=await API.publicPlateSummary(value);if(requestVersion===lookupVersion.current)setSummary(plate.summary??null);}catch{/* search results remain usable */}
       }
@@ -194,7 +204,12 @@ export default function PublicTicketLookup(){
                   ? `Deadline: ${dateOnly(ticket.dispute_deadline_date)}`
                   : 'Not available'}</dd></div>
           </dl>
-          <section className="card" style={{marginTop:16,padding:16}} aria-label="Verified citation identity">
+          {qrIdentity?.ticketNumber===ticket.ticket_number&&<section className="card" style={{marginTop:16,padding:16}} aria-label="QR citation identity">
+            <h3>Citation Identity</h3>
+            <dl className="details-grid"><div><dt>Cited Driver</dt><dd>{qrIdentity.citedDriverName}</dd></div><div><dt>Registered Owner</dt><dd>{qrIdentity.registeredOwnerName}</dd></div></dl>
+            <p>Shown from the protected QR link. Do not share this link publicly.</p>
+          </section>}
+          {qrIdentity?.ticketNumber!==ticket.ticket_number&&<section className="card" style={{marginTop:16,padding:16}} aria-label="Verified citation identity">
             <h3>Verify Citation Identity</h3>
             <p>To protect personal information, the cited driver's and registered owner's full names are available only after an email verification code. The code is sent to the email recorded when this citation was issued.</p>
             {identityName?.ticketNumber===ticket.ticket_number
@@ -207,7 +222,8 @@ export default function PublicTicketLookup(){
                 </form>}
               </>}
             {identityMessage&&<p role="status">{identityMessage}</p>}
-          </section>
+          </section>}
+          {qrIdentity?.ticketNumber!==ticket.ticket_number&&null}
           <CitationViolations ticket={ticket} publicView/>
           {canFilePublicDispute(ticket)?<><Notice type="info">Online dispute filing is available through {dateOnly(ticket.dispute_deadline_date)}. Eligibility is evaluated using Asia/Manila dates.</Notice><button type="button" className="dispute-trigger" disabled={disputeSubmitting} onClick={()=>openDispute(ticket)}>File a Dispute</button></>:<div className="dispute-ineligible"><strong>Dispute unavailable for this ticket.</strong><Notice type="info">{ticket.dispute_message||'This ticket is not eligible for a dispute.'}</Notice><p>If you need clarification, please contact the issuing office.</p></div>}
         </article>)}
