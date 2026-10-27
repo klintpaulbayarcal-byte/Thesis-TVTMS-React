@@ -149,6 +149,7 @@ export const API = {
 
   tickets: (filters, options) => apiRequest(`/tickets${qs(filters) ? `?${qs(filters)}` : ''}`, options),
   ticket: id => apiRequest(`/tickets/${id}`),
+  ticketQrLink: id => apiRequest(`/tickets/${id}/qr-link`),
   citationContext: () => apiRequest('/tickets/issuance-context'),
   createTicket: data => apiRequest('/tickets', { method: 'POST', body: JSON.stringify(data) }),
   retryTicketNotification: (id, data) => {
@@ -208,6 +209,7 @@ export const API = {
   publicStats: () => apiRequest('/public/stats'),
   publicViolations: () => apiRequest('/public/violations'),
   publicTicketLookup: filters => apiRequest(`/public/ticket-lookup?${qs(filters)}`),
+  publicQrIdentity: (ticket,qr) => apiRequest(`/public/qr-identity?${qs({ticket,qr})}`),
   publicVehicleLookup: plateNumber => apiRequest(`/public/vehicle-lookup?${qs({ plateNumber })}`),
   publicPlateSummary: plateNumber => apiRequest(`/public/plate-summary?${qs({ plateNumber })}`),
   publicIdentityRequest: data => apiRequest('/public/identity/request', { method: 'POST', body: JSON.stringify(data) }),

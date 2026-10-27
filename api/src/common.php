@@ -24,6 +24,7 @@ function app_config(): array
 require_once __DIR__ . '/mail.php';
 
 require_once __DIR__ . '/supabase.php';
+require_once __DIR__ . '/qr_identity_link.php';
 require_once __DIR__ . '/ticket_email.php';
 require_once __DIR__ . '/dispute_verification.php';
 
