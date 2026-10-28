@@ -7,6 +7,6 @@ export default function ProtectedRoute({ roles, children }) {
   const location = useLocation();
   if (checking) return <div className="center-screen"><LoadingSpinner label="Checking session…" /></div>;
   if (!token || !user) return <Navigate to="/login" replace state={{ from: location }} />;
-  if (roles?.length && !roles.includes(user.role)) return <Navigate to={user.role === 'admin' ? '/admin' : '/officer'} replace />;
+  if (roles?.length && !roles.includes(user.role)) return <Navigate to={user.role === 'admin' ? '/admin' : user.role === 'driver' ? '/driver' : '/officer'} replace />;
   return children;
 }
