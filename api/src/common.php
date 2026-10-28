@@ -73,7 +73,7 @@ function current_user(bool $required=true): ?array
     try{$rows=supabase_select('users',['id'=>'eq.'.(int)$payload['id']],['select'=>'id,name,email,role,status,contact_number,plate_number,password','limit'=>1]);}
     catch(Throwable $e){if($required)throw $e;return null;}
     $user=$rows[0]??null;
-    if(!$user||($user['status']??'')!=='active'||!in_array($user['role']??'', ['admin','apprehending_officer'],true)){
+    if(!$user||($user['status']??'')!=='active'||!in_array($user['role']??'', ['admin','apprehending_officer','driver'],true)){
         if($required)fail('User not found or account is inactive.',401,'INVALID_SESSION');return null;
     }
     if(!token_matches_password($payload,(string)($user['password']??''))){if($required)fail('Invalid session or token.',401,'INVALID_SESSION');return null;}
