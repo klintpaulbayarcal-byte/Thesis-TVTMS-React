@@ -122,6 +122,9 @@ const notificationCancelled = () => ({notification:{
 
 export const API = {
   health: () => apiRequest('/health'),
+  registerDriver: data => apiRequest('/driver/register', { method:'POST', body:JSON.stringify(data) }),
+  activateDriver: token => apiRequest('/driver/activate', { method:'POST', body:JSON.stringify({token}) }),
+  driverPortal: () => apiRequest('/driver/portal'),
   login: credentials => apiRequest('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
   logout: () => apiRequest('/auth/logout', { method: 'POST' }),
   profile: () => apiRequest('/auth/profile'),
