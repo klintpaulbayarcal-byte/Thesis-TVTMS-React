@@ -136,6 +136,7 @@ export const API = {
   user: id => apiRequest(`/users/${id}`),
   createUser: data => apiRequest('/users', { method: 'POST', body: JSON.stringify(data) }),
   updateUser: (id, data) => apiRequest(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  updateDriverStatus: (id,status) => apiRequest(`/users/${id}/driver-status`,{method:'PUT',body:JSON.stringify({status})}),
   deleteUser: id => apiRequest(`/users/${id}`, { method: 'DELETE' }),
   unlockUser: id => apiRequest(`/users/${id}/unlock`, { method: 'POST' }),
   updateMe: data => apiRequest('/users/me', { method: 'PUT', body: JSON.stringify(data) }),
