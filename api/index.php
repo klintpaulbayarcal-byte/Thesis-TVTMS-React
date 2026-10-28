@@ -35,6 +35,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
 $requestMethod=$_SERVER['REQUEST_METHOD'] ?? 'GET';
 $requestPath=normalize_api_path($_SERVER['REQUEST_URI'] ?? '/api');
 $limits=[['api',300,300,'Too many requests. Please slow down and try again.','RATE_LIMIT_API']];
+if(in_array($requestPath,['/api/driver/register','/api/driver/activate'],true))$limits[]=['driver-register',8,900,'Too many registration attempts. Please try again later.','RATE_LIMIT_DRIVER_REGISTRATION'];
 if(in_array($requestPath,['/api/auth/login','/api/auth/request-password-reset','/api/auth/reset-password'],true))$limits[]=['auth',10,900,'Too many authentication attempts. Please try again later.','RATE_LIMIT_AUTH'];
 if(in_array($requestPath,['/api/public/ticket-lookup','/api/public/vehicle-lookup','/api/public/plate-summary'],true))$limits[]=['lookup',60,600,'Too many public lookup attempts. Please try again later.','RATE_LIMIT_LOOKUP'];
 if($requestMethod==='POST'&&in_array($requestPath,['/api/public/identity/request','/api/public/identity/verify'],true))$limits[]=['qr-identity',12,900,'Too many identity verification attempts. Please try later.','RATE_LIMIT_QR_IDENTITY'];
