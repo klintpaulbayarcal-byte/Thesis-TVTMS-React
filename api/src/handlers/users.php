@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 function users_list(array $params=[]): never
 {
-    require_role(['admin']);$rows=supabase_select('users',['role'=>'in.(admin,apprehending_officer,driver)'],['select'=>'id,name,email,role,officer_rank,contact_number,status,last_login,locked_until,created_at','order'=>'created_at.desc,id.asc','limit'=>1000]);json_response(['success'=>true,'users'=>$rows,'data'=>$rows]);
+    require_role(['admin']);$rows=supabase_select('users',['role'=>'in.(admin,apprehending_officer,driver)'],['select'=>'id,name,email,role,officer_rank,contact_number,status,driver_verified_at,last_login,locked_until,created_at','order'=>'created_at.desc,id.asc','limit'=>1000]);json_response(['success'=>true,'users'=>$rows,'data'=>$rows]);
 }
 function users_set_driver_status(array $params): never
 {
