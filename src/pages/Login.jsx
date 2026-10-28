@@ -22,7 +22,7 @@ export default function Login(){
     return () => document.body.classList.remove('login-modern');
   }, []);
 
-  if (user) return <Navigate to={user.role === 'admin' ? '/admin' : '/officer'} replace />;
+  if (user) return <Navigate to={user.role === 'admin' ? '/admin' : user.role === 'driver' ? '/driver' : '/officer'} replace />;
 
   const submit = async (event) => {
     event.preventDefault();
@@ -30,7 +30,7 @@ export default function Login(){
     setBusy(true);
     try {
       const authenticated = await login(form);
-      const fallback = authenticated.role === 'admin' ? '/admin' : '/officer';
+      const fallback = authenticated.role === 'admin' ? '/admin' : authenticated.role === 'driver' ? '/driver' : '/officer';
       const from = location.state?.from?.pathname;
       navigate(from && from !== '/login' ? from : fallback, { replace: true });
     } catch (authError) {
@@ -170,6 +170,7 @@ export default function Login(){
           <Link className="public-lookup-link" to="/ticket-lookup">Open the public lookup</Link>
         </p>
 
+        <p className="register-line">Driver or Public User? <Link to="/driver/register">Create a Driver Account</Link></p>
         <div className="form-footer">
           <p>© 2026 Traffic Violation Ticketing and Management System.<br />BS Computer Science academic thesis project.</p>
         </div>
