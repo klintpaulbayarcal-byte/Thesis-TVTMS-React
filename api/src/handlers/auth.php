@@ -21,6 +21,10 @@ function auth_login(array $params=[]): never
         $failed=(int)($user['failed_login_attempts']??0)+1;try{supabase_rpc('tvtms_account_failed_login',['p_id'=>(int)$user['id'],'p_max_attempts'=>5,'p_lock_minutes'=>15]);}catch(Throwable $e){error_log('Lockout update skipped: '.$e->getMessage());}
         log_audit((int)$user['id'],$failed>=5?'ACCOUNT_LOCKED':'LOGIN_FAILED','users',(int)$user['id'],['failedAttempts'=>$failed]);fail('Invalid email or password',401,'INVALID_CREDENTIALS');
     }
+    if(($user['role']??'')==='driver'){
+        $verified=supabase_select('users',['id'=>'eq.'.(int)$user['id']],['select'=>'driver_verified_at','limit'=>1]);
+        if(empty($verified[0]['driver_verified_at']))fail('Activate your Driver Account using the email link before signing in.',403,'DRIVER_NOT_VERIFIED');
+    }
     try{supabase_update('users',['failed_login_attempts'=>0,'locked_until'=>null,'last_login'=>date(DATE_ATOM)],['id'=>'eq.'.(int)$user['id']],false);}catch(Throwable $e){error_log('Login state update skipped: '.$e->getMessage());}
     $secret=(string)(app_config()['token_secret']??'');if(strlen($secret)<32||str_contains($secret,'CHANGE_THIS'))fail('Server authentication is not configured.',500,'AUTH_CONFIG_ERROR');
     $token=token_sign(['id'=>(int)$user['id'],'email'=>$user['email'],'role'=>$user['role'],'name'=>$user['name'],'pwd'=>token_password_fingerprint((string)$user['password'])],$secret,(int)(app_config()['token_ttl_seconds']??28800));
