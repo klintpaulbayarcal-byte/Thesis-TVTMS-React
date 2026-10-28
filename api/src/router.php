@@ -8,6 +8,7 @@ function api_routes(): array
 
         ['POST', '#^/api/driver/register/?$#', 'driver_register'],
         ['POST', '#^/api/driver/activate/?$#', 'driver_activate'],
+        ['POST', '#^/api/driver/resend-activation/?$#', 'driver_resend_activation'],
         ['GET', '#^/api/driver/portal/?$#', 'driver_portal'],
         ['POST', '#^/api/auth/login/?$#', 'auth_login'],
         ['POST', '#^/api/auth/request-password-reset/?$#', 'auth_request_password_reset'],
