@@ -22,6 +22,7 @@ function api_routes(): array
         ['DELETE', '#^/api/users/audit-logs/clear/?$#', 'users_clear_audit_logs'],
         ['POST', '#^/api/users/(?P<id>\d+)/unlock/?$#', 'users_unlock'],
         ['GET', '#^/api/users/(?P<id>\d+)/?$#', 'users_get_one'],
+        ['PUT', '#^/api/users/(?P<id>\\d+)/driver-status/?$#', 'users_set_driver_status'],
         ['PUT', '#^/api/users/(?P<id>\d+)/?$#', 'users_update'],
         ['DELETE', '#^/api/users/(?P<id>\d+)/?$#', 'users_delete'],
         ['GET', '#^/api/users/?$#', 'users_list'],
