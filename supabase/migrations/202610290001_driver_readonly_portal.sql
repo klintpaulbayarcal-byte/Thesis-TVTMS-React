@@ -29,6 +29,11 @@ select coalesce(jsonb_agg(
                     t.penalty_amount_at_issue,0),
   'totalPaid',coalesce((select sum(p.amount_paid) from public.payments p
                     where p.ticket_id=t.id and p.payment_status in ('partial','full')),0),
+  'remainingBalance',greatest(0,
+    coalesce((select sum(tv.penalty_amount_at_issue) from public.ticket_violations tv where tv.ticket_id=t.id),
+             t.penalty_amount_at_issue,0)
+    -coalesce((select sum(p.amount_paid) from public.payments p
+               where p.ticket_id=t.id and p.payment_status in ('partial','full')),0)),
   'violations',coalesce((select jsonb_agg(jsonb_build_object(
     'name',tv.violation_name_at_issue,
     'code',tv.violation_code_at_issue,
