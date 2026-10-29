@@ -70,6 +70,8 @@ test('driver portal returns only verified-email citation snapshots, not another 
  assert.deepEqual(none,[]);
  assert.equal(a[0].penaltyAmount,300);
  assert.equal(a[0].totalPaid,100);
+ assert.equal(a[0].remainingBalance,200);
+ assert.equal(b[0].remainingBalance,150);
  assert.equal(a[0].violations.length,2);
  assert.equal(a[0].driverAddress,'Private test address');
  assert.equal(a[0].licenseNumber,'PRIVATE-123');
