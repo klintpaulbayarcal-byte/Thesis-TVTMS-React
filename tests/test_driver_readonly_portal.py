@@ -13,6 +13,7 @@ def test_driver_only_routes_and_permissions():
     assert 'API.driverPortal()' in dashboard
     assert 'API.createTicket(' not in dashboard
     assert 'API.recordPayment(' not in dashboard
+    assert 'item.remainingBalance' in dashboard
     api=source('api/src/handlers/driver_portal.php')
     assert "require_role(['driver'])" in api
     assert "['role'=>'eq.driver'" in api or "'role'=>'eq.driver'" in api
@@ -26,6 +27,7 @@ def test_db_scope_is_email_and_issue_time_only():
     assert 'driver_email_at_issue' in sql
     assert 'lower(trim(p_email))' in sql
     assert 'plateNumber' in sql
+    assert "'remainingBalance'" in sql
     assert 'grant execute on function public.tvtms_driver_portal(text) to service_role' in sql
     assert 'grant execute on function public.tvtms_driver_portal(text) to anon' not in sql
     assert 'update public.tickets' not in sql.lower()
