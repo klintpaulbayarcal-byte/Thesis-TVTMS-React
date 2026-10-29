@@ -34,3 +34,9 @@ def test_db_scope_is_email_and_issue_time_only():
 def test_php_driver_registration_lints():
     p=subprocess.run(['php','-l','api/src/handlers/driver_portal.php'],capture_output=True,text=True,cwd=ROOT,timeout=20)
     assert p.returncode==0,p.stdout+'\n'+p.stderr
+
+def test_admin_driver_status_update_returns_representation():
+    code=source('api/src/handlers/users.php')
+    section=code.split('function users_set_driver_status(',1)[1].split('function users_get_one(',1)[0]
+    assert "supabase_update('users',['status'=>$status],['id'=>'eq.'.$id,'role'=>'eq.driver'])" in section
+    assert "['id'=>'eq.'.$id,'role'=>'eq.driver'],false" not in section
