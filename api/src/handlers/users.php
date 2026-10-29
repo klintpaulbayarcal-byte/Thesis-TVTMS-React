@@ -16,7 +16,7 @@ function users_set_driver_status(array $params): never
     if($status==='active'&&empty($record['driver_verified_at']))
         fail('An unverified driver cannot be activated by an administrator.',409,'DRIVER_NOT_VERIFIED');
     if($record['status']!==$status){
-        $out=supabase_update('users',['status'=>$status],['id'=>'eq.'.$id,'role'=>'eq.driver'],false);
+        $out=supabase_update('users',['status'=>$status],['id'=>'eq.'.$id,'role'=>'eq.driver']);
         if(!$out)fail('Driver status update could not be confirmed.',409,'STATUS_UPDATE_FAILED');
         log_audit((int)$actor['id'],'DRIVER_ACCOUNT_STATUS_CHANGED','users',$id,['status'=>$status]);
     }
