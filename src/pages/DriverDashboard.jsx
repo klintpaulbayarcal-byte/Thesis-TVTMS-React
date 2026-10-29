@@ -22,6 +22,7 @@ export default function DriverDashboard(){
   <div><small>Vehicle Type / Make</small><strong>{[item.vehicleType,item.vehicleMake].filter(Boolean).join(' / ')||'Not recorded'}</strong></div>
   <div><small>Penalty</small><strong>{money(item.penaltyAmount)}</strong></div>
   <div><small>Total Paid</small><strong>{money(item.totalPaid)}</strong></div>
+  <div><small>Remaining Balance</small><strong>{money(item.remainingBalance)}</strong></div>
   </div><h3>Violations</h3><ul>{(item.violations||[]).map((v,i)=><li key={i}>{v.name||'Not recorded'} · {money(v.penalty)}</li>)}</ul>
   <p className="driver-portal-note">Information is from the issued citation snapshot. This page does not validate LTO license or registration records.</p>
  </article>)}
