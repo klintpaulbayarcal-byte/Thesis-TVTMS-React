@@ -112,6 +112,50 @@ jobs:
           if problems: sys.exit(1)
           print('PASS: Repository Gmail SMTP secret formats are consistent. No SMTP connection, email, or deployment was attempted.')
           PY
+      - name: Diagnose Gmail SMTP connection and authentication (NO EMAIL SENT)
+        continue-on-error: true
+        env:
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os, ssl, smtplib, sys
+          # Fixed Gmail server, no sender/recipient and no DATA step.
+          try:
+              with smtplib.SMTP('smtp.gmail.com', 587, timeout=12) as smtp:
+                  smtp.ehlo()
+                  smtp.starttls(context=ssl.create_default_context())
+                  smtp.ehlo()
+                  smtp.login(os.environ['SMTP_USERNAME'], os.environ['SMTP_PASSWORD'])
+                  print('Gmail SMTP authenticated successfully (no email sent).')
+          except smtplib.SMTPAuthenticationError as e:
+              print('Gmail SMTP authentication failed; SMTP reply code:', int(e.smtp_code))
+              sys.exit(1)
+          except (OSError, TimeoutError, smtplib.SMTPException) as e:
+              # Never print server reply text or credentials.
+              print('Gmail SMTP connectivity or protocol failed; failure class:', type(e).__name__)
+              sys.exit(1)
+          PY
+      - name: Read-only QA citation public lookup health (NO DISPUTE CREATED)
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl --silent --show-error --max-time 20 --retry 0 \
+            --get --data-urlencode 'ticketNumber=TEST-QA-20261007-001' \
+            --output "$RUNNER_TEMP/tvtms-qa-public-lookup.json" \
+            --write-out '%{http_code}' \
+            'https://trafficviolation.dcsbisu.com/api/public/ticket-lookup')"
+          echo "QA citation lookup HTTP status: $code"
+          test "$code" = 200
+          python - "$RUNNER_TEMP/tvtms-qa-public-lookup.json" <<'PY'
+          import sys, json
+          x=json.load(open(sys.argv[1]))
+          assert x.get('success') is True
+          # No driver/owner details are printed or persisted to artifacts.
+          print('Public lookup JSON validated; records returned:', len(x.get('tickets', [])))
+          PY
       - name: Probe live dispute handling with verified nonexistent QA citation (no dispute created)
         shell: bash
         run: |
