@@ -63,7 +63,7 @@ function driver_activate(array $params=[]): never {
  $id=(int)$rows[0]['id'];
  $updated=supabase_update('users',['status'=>'active','driver_verified_at'=>date(DATE_ATOM),
   'driver_signup_token_hash'=>null,'driver_signup_expires_at'=>null],
-  ['id'=>'eq.'.$id,'status'=>'eq.inactive','driver_signup_token_hash'=>'eq.'.$hash]);
+  ['id'=>'eq.'.$id,'role'=>'eq.driver','status'=>'eq.inactive','driver_signup_token_hash'=>'eq.'.$hash,'driver_signup_expires_at'=>'gt.'.date(DATE_ATOM)]);
  if(!$updated)fail('Activation link has already been used.',409,'ACTIVATION_USED');
  json_response(['success'=>true,'message'=>'Driver account activated. You may now sign in.']);
 }
