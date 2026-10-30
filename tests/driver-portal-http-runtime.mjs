@@ -47,6 +47,10 @@ try{
  pass('Fresh isolated PHP API, empty database, SMTP disabled');
  const email='alice-driver@local.test';
  await call('/driver/register',null,'POST',{name:'TEST Driver Alice',email,password},201);
+ const duplicate=await call('/driver/register',null,'POST',{name:'TEST Driver Alice',email,password},201);
+ const unrelated=await call('/driver/register',null,'POST',{name:'Test Staff',email:'officer@local.test',password},201);
+ assert.equal(duplicate.message,unrelated.message);
+ assert.equal((await table('users','GET',undefined,'?email=eq.'+email)).length,1);
  const [alice]=await table('users','GET',undefined,'?email=eq.'+email);
  assert.equal(alice.role,'driver');assert.equal(alice.status,'inactive');assert.equal(alice.driver_verified_at,null);
  assert.match(alice.driver_signup_token_hash,/^[a-f0-9]{64}$/);assert.match(alice.password,/^\$2/);
