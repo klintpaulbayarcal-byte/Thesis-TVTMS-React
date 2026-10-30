@@ -72,6 +72,11 @@ test('driver portal returns only verified-email citation snapshots, not another 
  assert.equal(a[0].totalPaid,100);
  assert.equal(a[0].remainingBalance,200);
  assert.equal(b[0].remainingBalance,150);
+ await run("update public.tickets set status='cancelled' where id=$1",[alice]);
+ const cancelled=(await run("select public.tvtms_driver_portal($1) as citations",['alice@example.test']))[0].citations;
+ assert.equal(cancelled[0].status,'cancelled');
+ assert.equal(cancelled[0].remainingBalance,0);
+ assert.equal(cancelled[0].totalPaid,100);
  assert.equal(a[0].violations.length,2);
  assert.equal(a[0].driverAddress,'Private test address');
  assert.equal(a[0].licenseNumber,'PRIVATE-123');
