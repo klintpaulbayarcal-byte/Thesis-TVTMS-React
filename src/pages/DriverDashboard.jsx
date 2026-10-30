@@ -20,7 +20,7 @@ export default function DriverDashboard(){
   </div>
   <h3>Driver License (Recorded at Issuance)</h3>
   <div className="driver-portal-fields">
-  <div><small>License Type / Classification</small><strong>{item.licenseTypeOther && String(item.licenseType||'').toLowerCase()==='other' ? `Other — ${item.licenseTypeOther}` : item.licenseType||'Not recorded'}</strong></div>
+  <div><small>License Type / Classification</small><strong>{item.licenseTypeOther && ['other','others'].includes(String(item.licenseType||'').trim().toLowerCase()) ? `Other — ${item.licenseTypeOther}` : item.licenseType||'Not recorded'}</strong></div>
   <div><small>License Number (as recorded)</small><strong>{item.licenseNumber||'Not recorded'}</strong></div>
   </div>
   <h3>Vehicle Registration Details (As Recorded)</h3>
