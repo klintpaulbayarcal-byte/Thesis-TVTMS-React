@@ -15,11 +15,15 @@ function auth_login(array $params=[]): never
     $rows=supabase_select('users',['email'=>'eq.'.$email,'status'=>'eq.active'],['select'=>'*','limit'=>1]);
     if(!$rows){log_audit(null,'LOGIN_FAILED','auth',null,['email'=>$email,'reason'=>'user_not_found_or_inactive']);fail('Invalid email or password',401,'INVALID_CREDENTIALS');}
     $user=$rows[0];
-    if(!in_array($user['role']??'', ['admin','apprehending_officer'],true)){log_audit((int)$user['id'],'LOGIN_BLOCKED_DISABLED_ROLE','users',(int)$user['id'],['role'=>$user['role']??null]);fail('This account role is no longer supported.',403,'DISABLED_ROLE');}
+    if(!in_array($user['role']??'', ['admin','apprehending_officer','driver'],true)){log_audit((int)$user['id'],'LOGIN_BLOCKED_DISABLED_ROLE','users',(int)$user['id'],['role'=>$user['role']??null]);fail('This account role is no longer supported.',403,'DISABLED_ROLE');}
     if(!empty($user['locked_until'])&&strtotime((string)$user['locked_until'])>time()){log_audit((int)$user['id'],'LOGIN_BLOCKED_LOCKED','users',(int)$user['id'],['lockedUntil'=>$user['locked_until']]);fail('Account is temporarily locked due to too many failed login attempts. Please try again later.',423,'ACCOUNT_LOCKED');}
     if(!password_verify($password,(string)$user['password'])){
         $failed=(int)($user['failed_login_attempts']??0)+1;try{supabase_rpc('tvtms_account_failed_login',['p_id'=>(int)$user['id'],'p_max_attempts'=>5,'p_lock_minutes'=>15]);}catch(Throwable $e){error_log('Lockout update skipped: '.$e->getMessage());}
         log_audit((int)$user['id'],$failed>=5?'ACCOUNT_LOCKED':'LOGIN_FAILED','users',(int)$user['id'],['failedAttempts'=>$failed]);fail('Invalid email or password',401,'INVALID_CREDENTIALS');
+    }
+    if(($user['role']??'')==='driver'){
+        $verified=supabase_select('users',['id'=>'eq.'.(int)$user['id']],['select'=>'driver_verified_at','limit'=>1]);
+        if(empty($verified[0]['driver_verified_at']))fail('Activate your Driver Account using the email link before signing in.',403,'DRIVER_NOT_VERIFIED');
     }
     try{supabase_update('users',['failed_login_attempts'=>0,'locked_until'=>null,'last_login'=>date(DATE_ATOM)],['id'=>'eq.'.(int)$user['id']],false);}catch(Throwable $e){error_log('Login state update skipped: '.$e->getMessage());}
     $secret=(string)(app_config()['token_secret']??'');if(strlen($secret)<32||str_contains($secret,'CHANGE_THIS'))fail('Server authentication is not configured.',500,'AUTH_CONFIG_ERROR');
@@ -53,5 +57,5 @@ function auth_reset_password(array $params=[]): never
 
 function auth_profile(array $params=[]): never
 {
-    $u=require_role(['admin','apprehending_officer']);$rows=supabase_select('users',['id'=>'eq.'.(int)$u['id']],['select'=>'id,name,email,role,officer_rank,contact_number,plate_number,created_at','limit'=>1]);if(!$rows)fail('User not found',404,'USER_NOT_FOUND');json_response(['success'=>true,'user'=>$rows[0],'data'=>$rows[0]]);
+    $u=require_role(['admin','apprehending_officer','driver']);$rows=supabase_select('users',['id'=>'eq.'.(int)$u['id']],['select'=>'id,name,email,role,officer_rank,contact_number,plate_number,created_at','limit'=>1]);if(!$rows)fail('User not found',404,'USER_NOT_FOUND');json_response(['success'=>true,'user'=>$rows[0],'data'=>$rows[0]]);
 }

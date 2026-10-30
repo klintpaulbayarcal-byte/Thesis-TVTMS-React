@@ -1,0 +1,9 @@
+.driver-access{min-height:100vh;display:grid;place-items:center;background:#eef3f9;padding:20px}
+.driver-access-card{background:#fff;border:1px solid #dce4ef;border-radius:16px;padding:28px;width:min(100%,520px);box-shadow:0 10px 30px #112b4610}
+.driver-access-card h1{margin:14px 0}.driver-access-card form{display:grid;gap:14px;margin:20px 0}
+.driver-access-card label{display:grid;gap:5px;font-weight:600}.driver-access-card input{padding:11px;border:1px solid #cbd5e1;border-radius:7px;font:inherit}
+.driver-portal{padding:24px;max-width:1050px;margin:auto}.driver-portal-header{display:flex;justify-content:space-between;gap:14px;align-items:start;flex-wrap:wrap;margin-bottom:24px}
+.driver-portal-card{background:#fff;border:1px solid #dce4ef;border-radius:12px;padding:22px;margin:16px 0}
+.driver-portal-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin:20px 0}
+.driver-portal-fields div{display:grid;gap:6px}.driver-portal-fields small{color:#536477}.driver-portal-fields strong{overflow-wrap:anywhere}
+.driver-portal-note{color:#536477;font-size:13px}

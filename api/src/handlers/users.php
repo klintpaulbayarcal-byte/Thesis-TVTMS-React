@@ -3,7 +3,24 @@ declare(strict_types=1);
 
 function users_list(array $params=[]): never
 {
-    require_role(['admin']);$rows=supabase_select('users',['role'=>'in.(admin,apprehending_officer)'],['select'=>'id,name,email,role,officer_rank,contact_number,status,last_login,locked_until,created_at','order'=>'created_at.desc,id.asc','limit'=>1000]);json_response(['success'=>true,'users'=>$rows,'data'=>$rows]);
+    require_role(['admin']);$rows=supabase_select('users',['role'=>'in.(admin,apprehending_officer,driver)'],['select'=>'id,name,email,role,officer_rank,contact_number,status,driver_verified_at,last_login,locked_until,created_at','order'=>'created_at.desc,id.asc','limit'=>1000]);json_response(['success'=>true,'users'=>$rows,'data'=>$rows]);
+}
+function users_set_driver_status(array $params): never
+{
+    $actor=require_role(['admin']);
+    $id=(int)($params['id']??0);$status=(string)(json_input()['status']??'');
+    if($id<=0||!in_array($status,['active','inactive'],true))fail('Invalid status.',400,'VALIDATION_ERROR');
+    $rows=supabase_select('users',['id'=>'eq.'.$id,'role'=>'eq.driver'],['select'=>'id,status,driver_verified_at','limit'=>1]);
+    $record=$rows[0]??null;
+    if(!$record)fail('Driver account not found.',404,'DRIVER_NOT_FOUND');
+    if($status==='active'&&empty($record['driver_verified_at']))
+        fail('An unverified driver cannot be activated by an administrator.',409,'DRIVER_NOT_VERIFIED');
+    if($record['status']!==$status){
+        $out=supabase_update('users',['status'=>$status],['id'=>'eq.'.$id,'role'=>'eq.driver']);
+        if(!$out)fail('Driver status update could not be confirmed.',409,'STATUS_UPDATE_FAILED');
+        log_audit((int)$actor['id'],'DRIVER_ACCOUNT_STATUS_CHANGED','users',$id,['status'=>$status]);
+    }
+    json_response(['success'=>true,'message'=>'Driver account status updated.']);
 }
 function users_get_one(array $params): never
 {

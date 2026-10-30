@@ -4,6 +4,9 @@ import PublicLayout from '../layouts/PublicLayout';
 import AppLayout from '../layouts/AppLayout';
 import Landing from '../pages/Landing';
 import Login from '../pages/Login';
+import DriverRegister from '../pages/DriverRegister';
+import DriverActivate from '../pages/DriverActivate';
+import DriverDashboard from '../pages/DriverDashboard';
 import ResetPassword from '../pages/ResetPassword';
 import PublicTicketLookup from '../pages/PublicTicketLookup';
 import AdminDashboard from '../pages/AdminDashboard';
@@ -33,6 +36,9 @@ export default function AppRoutes(){
       <Route path="/ticket-lookup" element={<PublicTicketLookup/>}/>
     </Route>
     <Route path="/login" element={<Login/>}/>
+    <Route path="/driver/register" element={<DriverRegister/>}/>
+    <Route path="/driver/activate" element={<DriverActivate/>}/>
+    <Route path="/driver" element={secure(['driver'], <DriverDashboard/>)}/>
     <Route path="/reset-password" element={<ResetPassword/>}/>
 
     <Route element={secure(['admin','apprehending_officer'], <AppLayout/>)}>

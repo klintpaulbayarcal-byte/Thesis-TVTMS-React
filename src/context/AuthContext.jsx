@@ -41,7 +41,7 @@ export function AuthProvider({ children }) {
     refreshProfile().catch(() => null).finally(() => setChecking(false));
   }, [token, refreshProfile]);
 
-  const value = useMemo(() => ({ token, user, checking, login, logout, refreshProfile, isAdmin: user?.role === 'admin', isOfficer: user?.role === 'apprehending_officer' }), [token,user,checking,login,logout,refreshProfile]);
+  const value = useMemo(() => ({ token, user, checking, login, logout, refreshProfile, isAdmin: user?.role === 'admin', isOfficer: user?.role === 'apprehending_officer', isDriver: user?.role === 'driver' }), [token,user,checking,login,logout,refreshProfile]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

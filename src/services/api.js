@@ -122,6 +122,10 @@ const notificationCancelled = () => ({notification:{
 
 export const API = {
   health: () => apiRequest('/health'),
+  registerDriver: data => apiRequest('/driver/register', { method:'POST', body:JSON.stringify(data) }),
+  resendDriverActivation: data => apiRequest('/driver/resend-activation', { method:'POST', body:JSON.stringify(data) }),
+  activateDriver: token => apiRequest('/driver/activate', { method:'POST', body:JSON.stringify({token}) }),
+  driverPortal: () => apiRequest('/driver/portal'),
   login: credentials => apiRequest('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
   logout: () => apiRequest('/auth/logout', { method: 'POST' }),
   profile: () => apiRequest('/auth/profile'),
@@ -132,6 +136,7 @@ export const API = {
   user: id => apiRequest(`/users/${id}`),
   createUser: data => apiRequest('/users', { method: 'POST', body: JSON.stringify(data) }),
   updateUser: (id, data) => apiRequest(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  updateDriverStatus: (id,status) => apiRequest(`/users/${id}/driver-status`,{method:'PUT',body:JSON.stringify({status})}),
   deleteUser: id => apiRequest(`/users/${id}`, { method: 'DELETE' }),
   unlockUser: id => apiRequest(`/users/${id}/unlock`, { method: 'POST' }),
   updateMe: data => apiRequest('/users/me', { method: 'PUT', body: JSON.stringify(data) }),
