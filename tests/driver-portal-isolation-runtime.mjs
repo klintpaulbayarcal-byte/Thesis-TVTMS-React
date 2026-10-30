@@ -30,6 +30,8 @@ test('driver portal returns only verified-email citation snapshots, not another 
  const secondViolation=await id("insert into public.violations(violation_code,violation_name,penalty_amount) values ('QA-PRIV-02','Test-only secondary violation',150) returning id");
  const makeTicket=async(number,driverEmail,version=2,ownerEmail=null,extraViolationId=null)=>{
   const penaltyAmount=extraViolationId?300:150;
+  const ownerName=number==='QA-DRIVER-A'?'QA Owner Alice':number==='QA-DRIVER-B'?'QA Owner Bob':null;
+  const ownerAddress=number==='QA-DRIVER-A'?'Owner private address':null;
   return id(`with inserted as (
     insert into public.tickets
       (ticket_number,user_id,vehicle_id,violation_id,date_issued,time_issued,
@@ -37,24 +39,22 @@ test('driver portal returns only verified-email citation snapshots, not another 
        citation_version,driver_email_at_issue,owner_email_at_issue,owner_name_at_issue,owner_address_at_issue,
        driver_first_name,driver_last_name,driver_address,driver_license_at_issue,
        plate_at_issue,vehicle_type_at_issue,penalty_amount_at_issue)
-    values ($1,$2,$3,$4,'2026-10-29','09:00',1,1,$5,$6,$7,
-            case when $1::text='QA-DRIVER-A' then 'QA Owner Alice' when $1::text='QA-DRIVER-B' then 'QA Owner Bob' else null end,
-            case when $1::text='QA-DRIVER-A' then 'Owner private address' else null end,'QA','Driver',
-            'Private test address','PRIVATE-123','QA-PRIV-01','car',$8)
-    returning id
+    values ($1,$2,$3,$4,'2026-10-29','09:00',1,1,$5,$6,$7,$8,$9,'QA','Driver',
+           'Private test address','PRIVATE-123','QA-PRIV-01','car',$10)
+    returning id,ticket_number
    ), seeded as (
     insert into public.ticket_violations
       (ticket_id,violation_id,violation_code_at_issue,violation_name_at_issue,
        penalty_amount_at_issue,same_violation_offense_count_at_issue,snapshot_origin)
-    select inserted.id,v.violation_id,concat($1,'-V',v.seq),'Test violation',150,1,'issued'
+    select inserted.id,v.violation_id,concat(inserted.ticket_number,'-V',v.seq::text),'Test violation',150,1,'issued'
     from inserted
     cross join (
       select $4::bigint as violation_id,1 as seq
       union all
-      select $9::bigint as violation_id,2 as seq where $9 is not null
+      select $11::bigint as violation_id,2 as seq where $11 is not null
     ) v
    )
-   select id from inserted`,[number,officer,vehicle,violation,version,driverEmail,ownerEmail,penaltyAmount,extraViolationId]);
+   select id from inserted`,[number,officer,vehicle,violation,version,driverEmail,ownerEmail,ownerName,ownerAddress,penaltyAmount,extraViolationId]);
  };
  const alice=await makeTicket('QA-DRIVER-A','  Alice@Example.test ',2,null,secondViolation);
  const bob=await makeTicket('QA-DRIVER-B','bob@example.test',2,'alice@example.test');
