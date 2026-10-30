@@ -38,8 +38,8 @@ test('driver portal returns only verified-email citation snapshots, not another 
        driver_first_name,driver_last_name,driver_address,driver_license_at_issue,
        plate_at_issue,vehicle_type_at_issue,penalty_amount_at_issue)
     values ($1,$2,$3,$4,'2026-10-29','09:00',1,1,$5,$6,$7,
-            case when $1='QA-DRIVER-A' then 'QA Owner Alice' when $1='QA-DRIVER-B' then 'QA Owner Bob' else null end,
-            case when $1='QA-DRIVER-A' then 'Owner private address' else null end,'QA','Driver',
+            case when $1::text='QA-DRIVER-A' then 'QA Owner Alice' when $1::text='QA-DRIVER-B' then 'QA Owner Bob' else null end,
+            case when $1::text='QA-DRIVER-A' then 'Owner private address' else null end,'QA','Driver',
             'Private test address','PRIVATE-123','QA-PRIV-01','car',$8)
     returning id
    ), seeded as (
