@@ -11,7 +11,7 @@ function driver_register(array $params=[]): never {
  if($name===''||strlen($name)<2||!filter_var($email,FILTER_VALIDATE_EMAIL)||strlen($email)>100||!is_strong_password($password))
    fail('Enter a name, valid email, and password of 12+ characters with upper/lowercase, number and symbol.',400,'VALIDATION_ERROR');
  $existing=supabase_select('users',['email'=>'eq.'.$email],['select'=>'id,role,status,driver_signup_last_sent_at','limit'=>1]);
- if($existing)json_response(['success'=>true,'message'=>$generic]);
+ if($existing)json_response(['success'=>true,'message'=>$generic],201);
  $token=bin2hex(random_bytes(32));$tokenHash=hash('sha256',$token);
  $expiry=(new DateTimeImmutable('+30 minutes'))->format(DATE_ATOM);
  try {
@@ -19,7 +19,7 @@ function driver_register(array $params=[]): never {
     'role'=>'driver','status'=>'inactive','driver_signup_token_hash'=>$tokenHash,
     'driver_signup_expires_at'=>$expiry,'driver_signup_last_sent_at'=>date(DATE_ATOM)]]);
  } catch(SupabaseException $e) {
-  if($e->pgCode==='23505')json_response(['success'=>true,'message'=>$generic]);
+  if($e->pgCode==='23505')json_response(['success'=>true,'message'=>$generic],201);
   throw $e;
  }
  $base=rtrim((string)(app_config()['app_public_url']??'https://trafficviolation.dcsbisu.com'),'/');
