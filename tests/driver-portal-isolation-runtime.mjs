@@ -80,6 +80,10 @@ test('driver portal returns only verified-email citation snapshots, not another 
  assert.equal(a[0].violations.length,2);
  assert.equal(a[0].driverAddress,'Private test address');
  assert.equal(a[0].licenseNumber,'PRIVATE-123');
+ assert.equal(a[0].registeredOwnerName,null);
+ assert.equal(b[0].registeredOwnerName,null);
+ assert.equal(Object.hasOwn(a[0],'ownerEmail'),false);
+ assert.equal(Object.hasOwn(a[0],'ownerAddress'),false);
  assert.ok(!a.some(x=>x.ticketNumber==='QA-DRIVER-B'||x.ticketNumber==='QA-DRIVER-LEGACY'||x.ticketNumber==='QA-DRIVER-NOEMAIL'));
  assert.notEqual(alice,bob);
 });
