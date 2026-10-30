@@ -56,6 +56,8 @@ test('driver portal returns only verified-email citation snapshots, not another 
  };
  const alice=await makeTicket('QA-DRIVER-A','  Alice@Example.test ',2,null,secondViolation);
  const bob=await makeTicket('QA-DRIVER-B','bob@example.test',2,'alice@example.test');
+ await run("update public.tickets set owner_name_at_issue='QA Owner Alice',owner_email_at_issue='owner-private@example.test',owner_address_at_issue='Owner private address' where id=$1",[alice]);
+ await run("update public.tickets set owner_name_at_issue='QA Owner Bob' where id=$1",[bob]);
  await makeTicket('QA-DRIVER-LEGACY','alice@example.test',1);
  await makeTicket('QA-DRIVER-NOEMAIL',null,2,'alice@example.test');
  await run(`insert into public.payments
@@ -80,8 +82,8 @@ test('driver portal returns only verified-email citation snapshots, not another 
  assert.equal(a[0].violations.length,2);
  assert.equal(a[0].driverAddress,'Private test address');
  assert.equal(a[0].licenseNumber,'PRIVATE-123');
- assert.equal(a[0].registeredOwnerName,null);
- assert.equal(b[0].registeredOwnerName,null);
+ assert.equal(a[0].registeredOwnerName,'QA Owner Alice');
+ assert.equal(b[0].registeredOwnerName,'QA Owner Bob');
  assert.equal(Object.hasOwn(a[0],'ownerEmail'),false);
  assert.equal(Object.hasOwn(a[0],'ownerAddress'),false);
  assert.ok(!a.some(x=>x.ticketNumber==='QA-DRIVER-B'||x.ticketNumber==='QA-DRIVER-LEGACY'||x.ticketNumber==='QA-DRIVER-NOEMAIL'));
