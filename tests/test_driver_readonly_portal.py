@@ -15,6 +15,7 @@ def test_driver_only_routes_and_permissions():
     assert 'API.recordPayment(' not in dashboard
     assert 'item.remainingBalance' in dashboard
     assert 'item.licenseTypeOther' in dashboard
+    assert "['other','others'].includes" in dashboard
     assert 'item.registeredOwnerName' in dashboard
     assert 'Vehicle Registration Details (As Recorded)' in dashboard
     assert 'Driver License (Recorded at Issuance)' in dashboard
