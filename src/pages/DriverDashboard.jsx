@@ -16,7 +16,7 @@ export default function DriverDashboard(){
   <div><small>Cited Driver</small><strong>{item.citedDriverName||'Not recorded'}</strong></div>
   <div><small>Driver Address (recorded)</small><strong>{item.driverAddress||'Not recorded'}</strong></div>
   <div><small>Nationality (recorded)</small><strong>{item.driverNationality||'Not recorded'}</strong></div>
-  <div><small>License Type</small><strong>{item.licenseType||'Not recorded'}</strong></div>
+  <div><small>License Type / Classification</small><strong>{item.licenseTypeOther && String(item.licenseType||'').toLowerCase()==='other' ? `Other — ${item.licenseTypeOther}` : item.licenseType||'Not recorded'}</strong></div>
   <div><small>License Number (as recorded)</small><strong>{item.licenseNumber||'Not recorded'}</strong></div>
   <div><small>Plate Number / Registration Identifier</small><strong>{item.plateNumber||'Not recorded'}</strong></div>
   <div><small>Vehicle Type / Make</small><strong>{[item.vehicleType,item.vehicleMake].filter(Boolean).join(' / ')||'Not recorded'}</strong></div>
