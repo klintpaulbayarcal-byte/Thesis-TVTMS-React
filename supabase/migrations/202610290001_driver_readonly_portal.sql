@@ -20,6 +20,9 @@ select coalesce(jsonb_agg(
   'licenseType',t.license_type,
   'licenseTypeOther',t.license_type_other,
   'licenseNumber',t.driver_license_at_issue,
+  -- Registration is a citation-time snapshot, never a live LTO or vehicle lookup.
+  -- Do not reveal owner contact information to a driver verified only by email.
+  'registeredOwnerName',t.owner_name_at_issue,
   'plateNumber',t.plate_at_issue,
   'vehicleType',t.vehicle_type_at_issue,
   'vehicleMake',t.vehicle_make_at_issue,
