@@ -34,10 +34,12 @@ test('driver portal returns only verified-email citation snapshots, not another 
     insert into public.tickets
       (ticket_number,user_id,vehicle_id,violation_id,date_issued,time_issued,
        plate_ticket_count_at_issue,same_violation_offense_count_at_issue,
-       citation_version,driver_email_at_issue,owner_email_at_issue,
+       citation_version,driver_email_at_issue,owner_email_at_issue,owner_name_at_issue,owner_address_at_issue,
        driver_first_name,driver_last_name,driver_address,driver_license_at_issue,
        plate_at_issue,vehicle_type_at_issue,penalty_amount_at_issue)
-    values ($1,$2,$3,$4,'2026-10-29','09:00',1,1,$5,$6,$7,'QA','Driver',
+    values ($1,$2,$3,$4,'2026-10-29','09:00',1,1,$5,$6,$7,
+            case when $1='QA-DRIVER-A' then 'QA Owner Alice' when $1='QA-DRIVER-B' then 'QA Owner Bob' else null end,
+            case when $1='QA-DRIVER-A' then 'Owner private address' else null end,'QA','Driver',
             'Private test address','PRIVATE-123','QA-PRIV-01','car',$8)
     returning id
    ), seeded as (
@@ -56,8 +58,7 @@ test('driver portal returns only verified-email citation snapshots, not another 
  };
  const alice=await makeTicket('QA-DRIVER-A','  Alice@Example.test ',2,null,secondViolation);
  const bob=await makeTicket('QA-DRIVER-B','bob@example.test',2,'alice@example.test');
- await run("update public.tickets set owner_name_at_issue='QA Owner Alice',owner_email_at_issue='owner-private@example.test',owner_address_at_issue='Owner private address' where id=$1",[alice]);
- await run("update public.tickets set owner_name_at_issue='QA Owner Bob' where id=$1",[bob]);
+
  await makeTicket('QA-DRIVER-LEGACY','alice@example.test',1);
  await makeTicket('QA-DRIVER-NOEMAIL',null,2,'alice@example.test');
  await run(`insert into public.payments
