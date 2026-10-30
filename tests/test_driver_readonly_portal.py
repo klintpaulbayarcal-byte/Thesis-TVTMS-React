@@ -14,6 +14,7 @@ def test_driver_only_routes_and_permissions():
     assert 'API.createTicket(' not in dashboard
     assert 'API.recordPayment(' not in dashboard
     assert 'item.remainingBalance' in dashboard
+    assert 'item.licenseTypeOther' in dashboard
     api=source('api/src/handlers/driver_portal.php')
     assert "require_role(['driver'])" in api
     assert "['role'=>'eq.driver'" in api or "'role'=>'eq.driver'" in api
