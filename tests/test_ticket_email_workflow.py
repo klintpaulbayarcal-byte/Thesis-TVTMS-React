@@ -21,7 +21,7 @@ def run_php(script):
 
 def invoke_attempt(claim,mail_status='accepted',finalize_error=False):
     script='''$calls=[];$mail=[];
-function app_config():array{return ['app_public_url'=>'https://trafficviolation.dcsbisu.com'];}
+function app_config():array{return ['app_public_url'=>'https://trafficviolation.dcsbisu.com','token_secret'=>str_repeat('z',32)];}
 function mask_email(string $email):?string{return 're***@example.test';}
 function rpc_domain_error(mixed $result):?array{return null;}
 function supabase_select(string $table,array $filters=[],array $options=[]):array{

@@ -97,6 +97,15 @@ for(const payment_date of ['not-a-date','2026-02-30','',null,123,true,[],{}]) {
 }
 assert.equal((await call(`/payments/ticket/${ticket.id}`,admin)).payments.length,0);
 check('Invalid supplied payment dates rejected without a payment record',()=>{});
+for(const invalid of [
+ {amount_paid:true},{amount_paid:[100]},{amount_paid:{amount:100}},{amount_paid:'100oops'},
+ {ticket_id:true},{ticket_id:[ticket.id]},{ticket_id:ticket.id+0.5},
+ {official_receipt_number:true},{official_receipt_number:['QA-INVALID']},
+]) {
+ assert.equal((await call('/payments',admin,'POST',{...payment,...invalid},400)).errorCode,'VALIDATION_ERROR');
+}
+assert.equal((await call(`/payments/ticket/${ticket.id}`,admin)).payments.length,0);
+check('Malformed JSON payment fields rejected before any payment is recorded',()=>{});
 await call('/payments',admin,'POST',payment,201);
 let detail=(await call(`/tickets/${ticket.id}`,admin)).ticket;
 assert.equal(Number(detail.total_paid),100);assert.equal(Number(detail.remaining_balance),200);

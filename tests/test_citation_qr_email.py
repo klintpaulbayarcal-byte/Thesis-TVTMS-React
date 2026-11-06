@@ -20,7 +20,7 @@ def run_php(code):
 
 def test_ticket_email_includes_qr_png_matching_the_public_link():
     code = f'''
-    function app_config(): array {{ return ["app_public_url"=>"https://trafficviolation.dcsbisu.com"]; }}
+    function app_config(): array {{ return ["app_public_url"=>"https://trafficviolation.dcsbisu.com","token_secret"=>str_repeat("z",32)]; }}
     require {json.dumps(str(ROOT / "api/src/ticket_email.php"))};
     $mail=ticket_notification_message([
         "ticketNumber"=>"CAL-2026/001", "plateNumber"=>"ABC1234",
@@ -75,7 +75,7 @@ def test_qr_email_uses_related_mime_with_inline_content_id():
 
 def test_qr_failure_preserves_email_link_and_other_mail_stays_html():
     code = f'''
-    function app_config(): array {{ return ["app_public_url"=>"http://invalid.example.org"]; }}
+    function app_config(): array {{ return ["app_public_url"=>"http://invalid.example.org","token_secret"=>str_repeat("z",32)]; }}
     require {json.dumps(str(ROOT / "api/src/ticket_email.php"))};
     $m=ticket_notification_message(["ticketNumber"=>"1234","plateNumber"=>"XYZ","penaltyAmount"=>150]);
     echo json_encode(["html"=>$m["html"],"count"=>count($m["inlineImages"])]);

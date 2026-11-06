@@ -19,6 +19,13 @@ def test_ui_confirmation_and_failed_mail_eligibility():
     client=(ROOT/'src/services/api.js').read_text()
     assert "deleteConfirmation!==ticket.ticket_number" in ui
     assert "disabled={!canDelete}" in ui
-    assert "notification.status === 'failed'" in ui
-    assert "ticket.status === 'cancelled'" in ui
+    # Server now determines eligibility, including cancelled/failed-email cases.
+    # Ticket Details must not independently infer permissions from incomplete fields.
+    handler=(ROOT/'api/src/handlers/tickets.php').read_text()
+    policy=handler.split('function ticket_admin_delete_eligibility(',1)[1].split('function tickets_list(',1)[0]
+    assert "ticket.delete_eligible === true" in ui
+    assert "ticket.delete_block_reason" in ui
+    assert "$state!=='cancelled'" in policy
+    assert "$status!=='failed'" in policy
+    assert "['unpaid','cancelled']" in policy
     assert "confirm_ticket_number: confirmTicketNumber" in client

@@ -1,3 +1,4 @@
+import PlateCitationGroup from '../components/PlateCitationGroup';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API } from '../services/api';
@@ -128,13 +129,23 @@ export default function LicensePlateLookup(){
       </div></section>
 
       <section className="lookup-section"><div className="section-title"><Icon name="analytics"/> Plate Ticket Summary</div><div className="summary-cards">
-        <div className="summary-card"><div className="card-label">Total Violations</div><div className="card-value">{stats?.total_violations??violations.length}</div></div>
-        <div className="summary-card paid"><div className="card-label">Paid Violations</div><div className="card-value">{stats?.paid_count??0}</div></div>
-        <div className="summary-card unpaid"><div className="card-label">Unpaid Violations</div><div className="card-value">{stats?.unpaid_count??0}</div></div>
+        <div className="summary-card"><div className="card-label">Historical Citations</div><div className="card-value">{stats?.historical_ticket_count??violations.length}</div></div><div className="summary-card"><div className="card-label">Individual Violations</div><div className="card-value">{violations.reduce((sum,item)=>sum+(Array.isArray(item.violations)&&item.violations.length?item.violations.length:1),0)}</div></div>
+        <div className="summary-card paid"><div className="card-label">Paid Citations</div><div className="card-value">{stats?.paid_count??0}</div></div>
+        <div className="summary-card unpaid"><div className="card-label">Unpaid Citations</div><div className="card-value">{stats?.unpaid_count??0}</div></div>
         <div className="summary-card"><div className="card-label">Total Outstanding</div><div className="card-value">{money(stats?.outstanding_balance)}</div></div>
       </div></section>
 
-      <section className="lookup-section"><div className="section-title"><Icon name="history"/> Plate Citation History</div><p className="lookup-helper">Plate history is vehicle history and does not by itself prove that the same person was driving.</p><DataTable columns={historyColumns} rows={violations} onRowClick={row=>row.id&&navigate(`/tickets/${row.id}`)}/></section>
+      <section className="lookup-section"><div className="section-title"><Icon name="history"/> Plate Citation History</div><p className="lookup-helper">All listed citations belong to this vehicle plate. Each citation can contain multiple violations; plate history does not prove the same person was driving.</p><PlateCitationGroup plate={vehicle.plate_number} citations={violations} totalCitations={stats?.historical_ticket_count} note="Open the vehicle once, then expand a citation to see its individual violations.">
+        {violations.map(item=><details className="plate-citation-item" key={item.id??item.ticket_number}>
+          <summary><strong>Citation {item.ticket_number}</strong><span>{dateOnly(item.date_issued)} · {money(item.penalty_amount)} · {item.payment_status??item.status}</span></summary>
+          <div className="plate-citation-item__details">
+            <p>Location: {item.location||'Not recorded'}</p>
+            <p>Balance: {money(item.remaining_balance)}</p>
+            <ul className="plate-citation-item__violations">{(item.violations?.length?item.violations:[{violation_name:item.violation_name,penalty_amount:item.penalty_amount}]).map((v,i)=><li key={v.violation_id??i}>{v.violation_name} · {money(v.penalty_amount)}</li>)}</ul>
+            {item.id&&<button type="button" className="btn btn-secondary btn-sm" onClick={()=>navigate(`/tickets/${item.id}`)}>View Citation Details</button>}
+          </div>
+        </details>)}
+      </PlateCitationGroup></section>
     </div>}
   </div>;
 }

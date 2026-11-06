@@ -1,3 +1,4 @@
+import PlateCitationGroup from '../components/PlateCitationGroup';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API } from '../services/api';
@@ -261,15 +262,15 @@ export default function IssueTicket() {
           {history && <div className="plate-history-context"><div className="plate-context-metrics">
             <div><span>Plate Ticket Count at Issuance</span><strong>{nextPlateTicketCount}</strong></div>
             <div><span>Current Plate Outstanding</span><strong>{money(plateOutstanding)}</strong></div>
-          </div><p>Plate history does not prove the same owner or driver, or repeat offending by a person.</p></div>}
-          {historyItems.length > 0 && <div className="issue-history"><div className="table-wrap"><table><caption>Existing citations for this plate</caption><thead><tr>
+          </div><p>Existing citations remain linked to this vehicle plate. A new citation receives its own number and can contain multiple violations. Plate history does not prove the same owner or driver, or repeat offending by a person.</p></div>}
+          {historyItems.length > 0 && <div className="issue-history"><PlateCitationGroup plate={history?.vehicle?.plate_number||form.plate_number} citations={historyItems} note="Expand this vehicle to view its earlier, separately issued citations."><div className="table-wrap"><table><caption>Existing citations and all recorded violations for this vehicle plate</caption><thead><tr>
             <th>Citation</th><th>Violations</th><th>Penalty</th><th>Paid</th><th>Balance</th><th>Status</th>
           </tr></thead><tbody>{historyItems.map(item => <tr key={item.id ?? item.ticket_number}>
             <td>{item.ticket_number}</td><td>{item.violations?.map(v => v.violation_name).join('; ') || item.violation_name}</td>
             <td>{money(item.penalty_amount)}</td><td>{money(item.total_paid)}</td>
             <td>{money(item.status === 'cancelled' ? 0 : item.remaining_balance)}</td>
             <td><StatusBadge value={item.payment_status ?? item.status}/></td>
-          </tr>)}</tbody></table></div></div>}
+          </tr>)}</tbody></table></div></PlateCitationGroup></div>}
         </section>
 
         <section className="citation-section"><h4 className="form-section-title"><Icon name="alert"/> Traffic Violations</h4>

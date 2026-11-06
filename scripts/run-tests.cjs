@@ -26,7 +26,9 @@ const python = pythonCandidates.find(candidate => fs.existsSync(candidate)) || '
 const tempRoot = path.join(root, '.test-tmp');
 fs.mkdirSync(tempRoot, {recursive: true});
 const runTemp = fs.mkdtempSync(path.join(tempRoot, 'run-'));
-const env = {...process.env, TEMP: runTemp, TMP: runTemp, TMPDIR: runTemp, TVTMS_PHP: php, PATH: `${path.dirname(php)}${path.delimiter}${process.env.PATH || ''}`};
+// Source files are UTF-8 on every platform. Windows' legacy code page can
+// corrupt currency copy and fail Path.read_text() before a test even executes.
+const env = {...process.env, PYTHONUTF8: '1', TEMP: runTemp, TMP: runTemp, TMPDIR: runTemp, TVTMS_PHP: php, PATH: `${path.dirname(php)}${path.delimiter}${process.env.PATH || ''}`};
 const result = spawnSync(python, ['-m', 'pytest', '-q', '-s', '-p', 'no:cacheprovider', '--basetemp', path.join(runTemp, 'pytest'), 'tests'], {cwd: root, env, stdio: 'inherit'});
 if (result.error) {
   console.error(`Unable to launch Python: ${result.error.message}`);

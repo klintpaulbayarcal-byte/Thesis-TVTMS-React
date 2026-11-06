@@ -6,7 +6,6 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_reset_loads_the_explicitly_cleared_filters():
     source = (ROOT / 'src/pages/ViewTickets.jsx').read_text(encoding='utf-8')
-    assert 'const load=async(nextFilters=filters)' in source
-    assert 'const response=await API.tickets(nextFilters)' in source
+    assert "setFilters({search:'',status:''})" in source
+    assert "setQuery({search:'',status:'',page:1,pageSize:50})" in source
     assert 'setTimeout(load,0)' not in source
-    assert 'load(clearedFilters)' in source

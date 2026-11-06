@@ -20,18 +20,51 @@ test('effective settlement overrides stale raw and derived labels without mutati
  assert.equal(partial.status,'unpaid');
 });
 
-test('QR popup retains its handle, detaches opener and waits for the graphic before print',()=>{
- let markup,opens=0,prints=0;const elements={'ticket-number':{},'ticket-qr':{},'print-qr':{}};
- const popup={opener:{},document:{write:s=>markup=s,close:()=>{},getElementById:id=>elements[id]},focus:()=>{},print:()=>prints++};
- assert.equal(printPublicTicketQr({toDataURL:()=> 'data:image/png;base64,TEST'},'<TEST&ONLY>',(...args)=>{opens++;assert.deepEqual(args,['','_blank']);return popup;}),true);
- assert.equal(opens,1);assert.equal(popup.opener,null);assert.equal(elements['ticket-number'].textContent,'<TEST&ONLY>');
- assert.ok(!markup.includes('<TEST&ONLY>'));assert.ok(markup.includes('no-referrer'));
- assert.equal(elements['ticket-qr'].src,'data:image/png;base64,TEST');assert.equal(prints,0);
- elements['ticket-qr'].onload();assert.equal(prints,1);
- elements['print-qr'].onclick();assert.equal(prints,2);
+// Same-tab QR printing uses a minimal fake DOM so the test never opens a browser,
+// sends data, or invokes a real operating-system printer.
+function qrPrintHarness() {
+ const printed = { count: 0, drawn: 0 };
+ const events = new Map();
+ const makeNode = tag => ({
+  tagName: tag.toUpperCase(), children: [], removed: false,
+  append(...nodes) { this.children.push(...nodes); },
+  remove() { this.removed = true; },
+  setAttribute(name, value) { (this.attributes ??= {})[name] = value; },
+  getContext: tag === 'canvas' ? () => ({ drawImage: () => printed.drawn++ }) : undefined,
+ });
+ const body=makeNode('body'),head=makeNode('head');
+ const doc={ body, head, createElement:makeNode, getElementById:()=>null };
+ const browser={
+  document:doc,
+  print() { printed.count++; },
+  addEventListener(name,fn) { events.set(name,fn); },
+  removeEventListener(name) { events.delete(name); },
+ };
+ return { browser, body, head, printed, events };
+}
+test('same-tab QR print copies the graphic and isolates a public-only print sheet',()=>{
+ const h=qrPrintHarness();
+ const canvas={ width:180, height:180 };
+ assert.equal(printPublicTicketQr(canvas,'<TEST&ONLY>',h.browser),true);
+ assert.equal(h.printed.count,1);
+ assert.equal(h.printed.drawn,1);
+ assert.equal(h.body.children.length,1);
+ const sheet=h.body.children[0];
+ assert.equal(sheet.children[1].textContent,'<TEST&ONLY>');
+ assert.equal(sheet.children[2].width,180);
+ assert.equal(sheet.children[2].height,180);
+ assert.ok(h.head.children[0].textContent.includes('@media print'));
+ assert.ok(h.head.children[0].textContent.includes('body > *:not('));
+ assert.equal(h.events.has('afterprint'),true);
+ h.events.get('afterprint')();
+ assert.equal(sheet.removed,true);
+ assert.equal(h.head.children[0].removed,true);
 });
-test('actual popup block returns failure without accessing a missing document',()=>{
- assert.equal(printPublicTicketQr({},'TEST ONLY',()=>null),false);
+test('QR print rejects missing canvas dimensions and a missing print capability',()=>{
+ const h=qrPrintHarness();
+ assert.equal(printPublicTicketQr({},'TEST ONLY',h.browser),false);
+ assert.equal(printPublicTicketQr({width:100,height:100},'TEST ONLY',{document:h.browser.document}),false);
+ assert.equal(h.printed.count,0);
 });
 test('complete coordinates and incomplete fragments are labeled while human places are preserved',()=>{
  assert.equal(displayLocation('9.882, 123.882664'),'Coordinates: 9.882, 123.882664');
