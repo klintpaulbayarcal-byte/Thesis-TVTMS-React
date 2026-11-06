@@ -1,21 +1,27 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { isolatedApiOrigin } from './scripts/isolated-qa-safety.mjs';
 
 // Project contract: TVTMS-REACT-UI-RESTORED-SOURCE-v3
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode }) => {
+  const isolated = process.env.TVTMS_ISOLATED_DEV === '1';
+  const apiOrigin = isolated ? isolatedApiOrigin(process.env.VITE_PHP_API_ORIGIN)
+    : process.env.VITE_PHP_API_ORIGIN || 'http://127.0.0.1:8000';
+  return {
   plugins: [react()],
   base: '/',
   server: {
     port: 5173,
-    proxy: mode === 'development' ? {
+    ...(isolated ? { host: '127.0.0.1', strictPort: true } : {}),
+    proxy: mode === 'development' || isolated ? {
       '/api': {
-        target: process.env.VITE_PHP_API_ORIGIN || 'http://127.0.0.1:8000',
+        target: apiOrigin,
         changeOrigin: true,
         secure: false,
       },
       '/uploads': {
-        target: process.env.VITE_PHP_API_ORIGIN || 'http://127.0.0.1:8000',
+        target: apiOrigin,
         changeOrigin: true,
         secure: false,
       },
@@ -26,4 +32,5 @@ export default defineConfig(({ mode }) => ({
     assetsDir: 'assets',
     sourcemap: false,
   },
-}));
+  };
+});

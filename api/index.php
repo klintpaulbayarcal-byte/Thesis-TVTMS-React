@@ -6,7 +6,21 @@ header('X-Frame-Options: DENY');
 header('Referrer-Policy: no-referrer');
 header("Permissions-Policy: geolocation=(self), camera=(self)");
 
+// Correlate the public-dispute request at PHP entry, before configuration,
+// rate-limiting, routing, or a Supabase call. Log no personal request data.
+// The presence of X-Request-ID can help distinguish a PHP-handled response
+// from a gateway failure that never reached the application.
+if(($_SERVER['REQUEST_METHOD']??'')==='POST'
+    &&preg_match('~^/api/public/dispute(?:[/?]|$)~',(string)($_SERVER['REQUEST_URI']??''))===1){
+    $disputeRequestId=bin2hex(random_bytes(8));
+    $GLOBALS['tvtms_public_dispute_request_id']=$disputeRequestId;
+    header('X-Request-ID: '.$disputeRequestId);
+    error_log('TVTMS public dispute ['.$disputeRequestId.'] reached PHP entry.');
+}
+
 require_once __DIR__ . '/src/common.php';
+// Validate local safety before authentication, rate limiting, health or database I/O.
+app_config();
 require_once __DIR__ . '/src/router.php';
 foreach (glob(__DIR__ . '/src/handlers/*.php') ?: [] as $handlerFile) {
     require_once $handlerFile;
@@ -23,8 +37,10 @@ $requestPath=normalize_api_path($_SERVER['REQUEST_URI'] ?? '/api');
 $limits=[['api',300,300,'Too many requests. Please slow down and try again.','RATE_LIMIT_API']];
 if(in_array($requestPath,['/api/auth/login','/api/auth/request-password-reset','/api/auth/reset-password'],true))$limits[]=['auth',10,900,'Too many authentication attempts. Please try again later.','RATE_LIMIT_AUTH'];
 if(in_array($requestPath,['/api/public/ticket-lookup','/api/public/vehicle-lookup','/api/public/plate-summary'],true))$limits[]=['lookup',60,600,'Too many public lookup attempts. Please try again later.','RATE_LIMIT_LOOKUP'];
-if($requestMethod==='POST' && in_array($requestPath,['/api/public/dispute','/api/public/contact'],true))$limits[]=['public-write',8,1800,'Too many submissions. Please try again later.','RATE_LIMIT_PUBLIC_WRITE'];
-foreach($limits as [$bucket,$max,$window,$message,$code]){$rl=rate_limit_check($bucket,$max,$window);if(!$rl['allowed']){header('Retry-After: '.(string)$rl['retry_after']);fail($message,429,$code);}}
+if($requestMethod==='POST'&&in_array($requestPath,['/api/public/identity/request','/api/public/identity/verify'],true))$limits[]=['qr-identity',12,900,'Too many identity verification attempts. Please try later.','RATE_LIMIT_QR_IDENTITY'];
+if($requestMethod==='POST'&&$requestPath==='/api/public/dispute')$limits[]=['public-dispute-submit',8,1800,'Too many dispute submissions. Please try again later.','RATE_LIMIT_PUBLIC_DISPUTE'];
+if($requestMethod==='POST'&&$requestPath==='/api/public/contact')$limits[]=['public-write',8,1800,'Too many submissions. Please try again later.','RATE_LIMIT_PUBLIC_WRITE'];
+foreach($limits as [$bucket,$max,$window,$message,$code]){$rl=rate_limit_check($bucket,$max,$window);if(!$rl['allowed']){header('Retry-After: '.(string)$rl['retry_after']);if(!empty($rl['unavailable']))fail('Request protection is temporarily unavailable. Please try again later.',503,'RATE_LIMIT_UNAVAILABLE');fail($message,429,$code);}}
 
 $route = resolve_route($requestMethod, $requestPath);
 if (!$route) {
@@ -39,8 +55,9 @@ if ($route['handler'] === 'health') {
             'status' => 'healthy',
             'database' => 'connected',
             'databaseClient' => 'supabase-postgresql',
-            'smtp' => !empty(app_config()['smtp']['enabled']) ? 'configured' : 'not_configured',
+            'smtp' => smtp_configuration_status(app_config()['smtp']??[])==='configured' ? 'configured' : 'not_configured',
             'deployment' => !empty(app_config()['development']) ? 'development' : 'production',
+            'isolatedDevelopment' => PHP_SAPI === 'cli-server' && !empty(app_config()['isolated_development']),
             'runtime' => 'php',
             'capabilities' => ['react-static-frontend','supabase-postgresql','ticket-permanent-delete','ticket-mark-unpaid','payment-state-audit'],
             'timestamp' => date(DATE_ATOM),

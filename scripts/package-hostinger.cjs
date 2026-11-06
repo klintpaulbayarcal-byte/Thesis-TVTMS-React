@@ -15,12 +15,17 @@ fs.mkdirSync(deploy, { recursive: true });
 
 function copy(src, dst) {
   if (!fs.existsSync(src)) return;
-  fs.cpSync(src, dst, { recursive: true });
+  fs.cpSync(src, dst, {
+    recursive: true,
+    // Do not even read/copy the private override into the assembled artifact.
+    filter: source => path.basename(source) !== 'config.local.php'
+      && !path.basename(source).startsWith('.release-'),
+  });
 }
 
 copy(dist, deploy);
 copy(path.join(root, 'api'), path.join(deploy, 'api'));
-copy(path.join(root, 'uploads'), path.join(deploy, 'uploads'));
+// Deliberately exclude 'uploads': it is runtime/user data, not application source.
 copy(path.join(root, '.htaccess'), path.join(deploy, '.htaccess'));
 copy(path.join(root, 'DEPLOYMENT_README.txt'), path.join(deploy, 'DEPLOYMENT_README.txt'));
 
