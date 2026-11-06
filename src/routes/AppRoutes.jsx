@@ -39,6 +39,9 @@ export default function AppRoutes(){
 
     <Route element={secure(['admin','apprehending_officer','driver'], <AppLayout/>)}>
       <Route path="/profile" element={<Profile/>}/>
+    </Route>
+
+    <Route element={secure(['admin','apprehending_officer'], <AppLayout/>)}>
       <Route path="/notifications" element={<Notifications/>}/>
       <Route path="/tickets/:id" element={<TicketDetails/>}/>
 
