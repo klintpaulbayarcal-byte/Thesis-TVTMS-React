@@ -15,15 +15,19 @@ const officerSections = [
   ['ENFORCEMENT', [['/officer/issue-ticket','Issue Traffic Citation','plus'],['/officer/tickets','My Tickets','ticket'],['/officer/lookup','Search Ticket','search']]],
   ['ACCOUNT', [['/notifications','Notifications','bell'],['/profile','My Profile','user']]],
 ];
+const driverSections = [
+  ['PUBLIC USER', [['/ticket-lookup','Ticket Lookup','search']]],
+  ['ACCOUNT', [['/profile','My Profile','user']]],
+];
 
 export default function Sidebar({ role, open, onNavigate }) {
   const { user, logout }=useAuth();
-  const sections=role==='admin'?adminSections:officerSections;
+  const sections=role==='admin'?adminSections:role==='apprehending_officer'?officerSections:driverSections;
   return <aside className={`sidebar ${open?'open':''}`}>
     <div className="sidebar-header"><div className="sidebar-logo"><img src="/images/calape-logo.webp" alt="Municipality of Calape logo"/><div className="sidebar-logo-text"><h3>Traffic Violation</h3><p>Ticketing &amp; Management System</p></div></div></div>
     <nav className="sidebar-nav">
       {sections.map(([section,links])=><div className="nav-section" key={section}><div className="nav-section-title">{section}</div>{links.map(([to,label,icon])=><NavLink key={`${section}-${to}`} end={to==='/admin'||to==='/officer'} to={to} onClick={onNavigate} className={({isActive})=>`nav-item ${isActive?'active':''}`}><Icon name={icon}/><span>{label}</span></NavLink>)}</div>)}
     </nav>
-    <div className="sidebar-footer"><div className="user-info"><div className="user-avatar">{(user?.name||user?.email||'U').slice(0,1).toUpperCase()}</div><div className="user-details"><h4>{user?.name||user?.email||'TVTMS User'}</h4><p>{role==='admin'?'Administrator':'Apprehending Officer'}</p></div><button className="sidebar-logout-button" onClick={logout} aria-label="Logout"><Icon name="logout" size={16}/></button></div></div>
+    <div className="sidebar-footer"><div className="user-info"><div className="user-avatar">{(user?.name||user?.email||'U').slice(0,1).toUpperCase()}</div><div className="user-details"><h4>{user?.name||user?.email||'TVTMS User'}</h4><p>{role==='admin'?'Administrator':role==='apprehending_officer'?'Apprehending Officer':'Public Driver'}</p></div><button className="sidebar-logout-button" onClick={logout} aria-label="Logout"><Icon name="logout" size={16}/></button></div></div>
   </aside>;
 }

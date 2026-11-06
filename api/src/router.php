@@ -7,6 +7,7 @@ function api_routes(): array
         ['GET', '#^/api/health/?$#', 'health'],
 
         ['POST', '#^/api/auth/login/?$#', 'auth_login'],
+        ['POST', '#^/api/auth/register/?$#', 'auth_register'],
         ['POST', '#^/api/auth/request-password-reset/?$#', 'auth_request_password_reset'],
         ['POST', '#^/api/auth/reset-password/?$#', 'auth_reset_password'],
         ['POST', '#^/api/auth/logout/?$#', 'auth_logout'],

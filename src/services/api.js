@@ -123,6 +123,7 @@ const notificationCancelled = () => ({notification:{
 export const API = {
   health: () => apiRequest('/health'),
   login: credentials => apiRequest('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
+  register: data => apiRequest('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
   logout: () => apiRequest('/auth/logout', { method: 'POST' }),
   profile: () => apiRequest('/auth/profile'),
   requestPasswordReset: email => apiRequest('/auth/request-password-reset', { method: 'POST', body: JSON.stringify({ email }) }),

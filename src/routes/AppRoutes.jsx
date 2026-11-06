@@ -4,6 +4,7 @@ import PublicLayout from '../layouts/PublicLayout';
 import AppLayout from '../layouts/AppLayout';
 import Landing from '../pages/Landing';
 import Login from '../pages/Login';
+import Register from '../pages/Register';
 import ResetPassword from '../pages/ResetPassword';
 import PublicTicketLookup from '../pages/PublicTicketLookup';
 import AdminDashboard from '../pages/AdminDashboard';
@@ -33,9 +34,10 @@ export default function AppRoutes(){
       <Route path="/ticket-lookup" element={<PublicTicketLookup/>}/>
     </Route>
     <Route path="/login" element={<Login/>}/>
+    <Route path="/register" element={<Register/>}/>
     <Route path="/reset-password" element={<ResetPassword/>}/>
 
-    <Route element={secure(['admin','apprehending_officer'], <AppLayout/>)}>
+    <Route element={secure(['admin','apprehending_officer','driver'], <AppLayout/>)}>
       <Route path="/profile" element={<Profile/>}/>
       <Route path="/notifications" element={<Notifications/>}/>
       <Route path="/tickets/:id" element={<TicketDetails/>}/>

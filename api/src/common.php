@@ -69,10 +69,10 @@ function current_user(bool $required=true): ?array
     if(strlen($secret)<32||str_contains($secret,'CHANGE_THIS')) fail('Server authentication is not configured.',500,'AUTH_CONFIG_ERROR');
     $payload=token_verify($token,$secret);
     if(!$payload||empty($payload['id'])){if($required)fail('Invalid session or token.',401,'INVALID_SESSION');return null;}
-    try{$rows=supabase_select('users',['id'=>'eq.'.(int)$payload['id']],['select'=>'id,name,email,role,status,contact_number,plate_number,password','limit'=>1]);}
+    try{$rows=supabase_select('users',['id'=>'eq.'.(int)$payload['id']],['select'=>'id,name,email,role,status,contact_number,driver_license_number,driver_license_expiry,plate_number,vehicle_registration_number,vehicle_registration_expiry,vehicle_type,vehicle_make,password','limit'=>1]);}
     catch(Throwable $e){if($required)throw $e;return null;}
     $user=$rows[0]??null;
-    if(!$user||($user['status']??'')!=='active'||!in_array($user['role']??'', ['admin','apprehending_officer'],true)){
+    if(!$user||($user['status']??'')!=='active'||!in_array($user['role']??'', ['admin','apprehending_officer','driver'],true)){
         if($required)fail('User not found or account is inactive.',401,'INVALID_SESSION');return null;
     }
     if(!token_matches_password($payload,(string)($user['password']??''))){if($required)fail('Invalid session or token.',401,'INVALID_SESSION');return null;}
