@@ -19,7 +19,9 @@ def test_approved_navbar_and_three_line_hero_content_are_present():
     assert '<strong>TVTMS</strong><span>Calape, Bohol</span>' in landing
     assert 'A digital platform supporting traffic citation management, public ticket verification, and enforcement record monitoring for Calape, Bohol.' in landing
     assert 'landing-register-link' in landing
-    assert 'Portal</Link>' in landing
+    assert 'Portal</Link>' not in landing
+    assert 'Admin &amp; Apprehending Officer Portal' not in landing
+    assert 'Staff Login' not in landing
     assert '<span>Calape, Bohol</span>' in landing
     assert 'SAFE ROADS. STRONGER COMMUNITIES.' in landing
     assert '<span>Traffic Violation</span>' in landing
