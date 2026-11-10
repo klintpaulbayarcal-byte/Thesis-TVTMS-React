@@ -10,7 +10,6 @@ import PublicTicketLookup from '../pages/PublicTicketLookup';
 import AdminDashboard from '../pages/AdminDashboard';
 import AdminOverview from '../pages/AdminOverview';
 import AdminSettings from '../pages/AdminSettings';
-import AnalyticsDashboard from '../pages/AnalyticsDashboard';
 import AuditLogs from '../pages/AuditLogs';
 import Disputes from '../pages/Disputes';
 import IssueTicket from '../pages/IssueTicket';
@@ -52,7 +51,6 @@ export default function AppRoutes(){
       <Route path="/admin/payments" element={secure(['admin'], <Payments/>)}/>
       <Route path="/admin/disputes" element={secure(['admin'], <Disputes/>)}/>
       <Route path="/admin/reports" element={secure(['admin'], <Reports/>)}/>
-      <Route path="/admin/analytics" element={secure(['admin'], <AnalyticsDashboard/>)}/>
       <Route path="/admin/audit-logs" element={secure(['admin'], <AuditLogs/>)}/>
       <Route path="/admin/settings" element={secure(['admin'], <AdminSettings/>)}/>
       <Route path="/admin/tickets" element={secure(['admin'], <ViewTickets/>)}/>

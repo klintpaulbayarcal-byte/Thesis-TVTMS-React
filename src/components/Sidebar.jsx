@@ -6,7 +6,7 @@ const adminSections = [
   ['MAIN', [['/admin','Dashboard','dashboard'],['/admin/overview','Overview','overview']]],
   ['ENFORCEMENT', [['/admin/tickets','All Tickets','ticket'],['/officer/lookup','Search Ticket','search']]],
   ['MANAGEMENT', [['/admin/violations','Violations','alert'],['/admin/users','Users','users'],['/admin/payments','Payments','payment'],['/admin/disputes','Disputes','dispute']]],
-  ['ANALYTICS', [['/admin/reports','Reports','report'],['/admin/analytics','Analytics','analytics']]],
+  ['REPORTS', [['/admin/reports','Reports','report']]],
   ['ADMIN TOOLS', [['/admin/audit-logs','Audit Trail','history'],['/notifications','Notifications','bell'],['/admin/settings','Settings','settings']]],
   ['ACCOUNT', [['/profile','My Profile','user']]],
 ];

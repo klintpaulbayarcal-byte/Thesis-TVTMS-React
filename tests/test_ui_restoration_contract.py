@@ -22,7 +22,7 @@ def test_landing_restores_finalized_visual_structure():
 
 def test_sidebar_restores_grouped_admin_and_officer_navigation():
     page = text('src/components/Sidebar.jsx')
-    for marker in ['MAIN', 'ENFORCEMENT', 'MANAGEMENT', 'ANALYTICS', 'ADMIN TOOLS', 'ACCOUNT', 'nav-section-title', 'nav-item']:
+    for marker in ['MAIN', 'ENFORCEMENT', 'MANAGEMENT', 'REPORTS', 'ADMIN TOOLS', 'ACCOUNT', 'nav-section-title', 'nav-item']:
         assert marker in page, f'Sidebar should restore finalized navigation marker: {marker}'
 
 
@@ -112,7 +112,6 @@ def test_remaining_core_pages_restore_finalized_cards_and_workflow_labels():
     disputes = text('src/pages/Disputes.jsx')
     notifications = text('src/pages/Notifications.jsx')
     reports = text('src/pages/Reports.jsx')
-    analytics = text('src/pages/AnalyticsDashboard.jsx')
     details = text('src/pages/TicketDetails.jsx')
     for marker in ['User Accounts', 'card-header', 'Add New User']:
         assert marker in users
@@ -125,7 +124,5 @@ def test_remaining_core_pages_restore_finalized_cards_and_workflow_labels():
         assert marker in notifications
     for marker in ['Generate Report', 'Report Results', 'Operational Insights', 'LGU Special Reports']:
         assert marker in reports
-    for marker in ['analytics-hero', 'Analytics & KPI Dashboard']:
-        assert marker in analytics
     for marker in ['ticket-detail-card', 'TRAFFIC CITATION', 'Date & Time Information', 'Vehicle Information', 'Violation Information', 'Issued By', 'Total Citation Penalty', 'Ticket Timeline', 'Payment History', 'Evidence']:
         assert marker in details
