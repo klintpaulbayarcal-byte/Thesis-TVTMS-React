@@ -8,6 +8,37 @@ function auth_normalize_legacy_email(mixed $value): string
     return $email;
 }
 
+function auth_register(array $params=[]): never
+{
+    $in=json_input();
+    $name=clean_string($in['name']??'',100);
+    $email=normalize_email($in['email']??'');
+    $password=(string)($in['password']??'');
+    $contact=clean_string($in['contact_number']??'',20);
+    $license=clean_string($in['driver_license_number']??'',30);
+    $licenseExpiry=clean_string($in['driver_license_expiry']??'',10);
+    $plate=normalize_plate($in['plate_number']??'');
+    $registration=clean_string($in['vehicle_registration_number']??'',30);
+    $registrationExpiry=clean_string($in['vehicle_registration_expiry']??'',10);
+    $vehicleType=clean_string($in['vehicle_type']??'',20);
+    $vehicleMake=clean_string($in['vehicle_make']??'',80);
+    if($name===''||!filter_var($email,FILTER_VALIDATE_EMAIL)||$password===''||$license===''||$licenseExpiry===''||$plate===''||$registration===''||$registrationExpiry===''||$vehicleType===''||$vehicleMake==='') fail('Complete all required driver, license, and vehicle registration fields.',400,'VALIDATION_ERROR');
+    if(strlen($email)>100||!is_strong_password($password)) fail('Password must be at least 12 characters and include uppercase, lowercase, number, and symbol.',400,'WEAK_PASSWORD');
+    if(!DateTime::createFromFormat('Y-m-d',$licenseExpiry)||!DateTime::createFromFormat('Y-m-d',$registrationExpiry)) fail('License and registration expiry dates must be valid.',400,'VALIDATION_ERROR');
+    if(!in_array($vehicleType,['motorcycle','tricycle','car','truck','bus','van'],true)) fail('Vehicle type is invalid.',400,'VALIDATION_ERROR');
+    if(supabase_select('users',['email'=>'eq.'.$email],['select'=>'id','limit'=>1])) fail('Email already exists',409,'DUPLICATE_EMAIL');
+    $hash=password_hash($password,PASSWORD_BCRYPT,['cost'=>10]);
+    try {
+        $rows=supabase_insert('users',[['name'=>$name,'email'=>$email,'password'=>$hash,'role'=>'driver','contact_number'=>$contact?:null,'driver_license_number'=>$license,'driver_license_expiry'=>$licenseExpiry,'plate_number'=>$plate,'vehicle_registration_number'=>$registration,'vehicle_registration_expiry'=>$registrationExpiry,'vehicle_type'=>$vehicleType,'vehicle_make'=>$vehicleMake,'status'=>'active']]);
+    } catch(SupabaseException $e) {
+        if($e->pgCode==='23505') fail('Email already exists',409,'DUPLICATE_EMAIL');
+        throw $e;
+    }
+    $id=(int)($rows[0]['id']??0);
+    log_audit($id,'PUBLIC_ACCOUNT_CREATED','users',$id,['role'=>'driver']);
+    json_response(['success'=>true,'message'=>'Account created successfully. You can now sign in.','userId'=>$id,'data'=>['id'=>$id]],201);
+}
+
 function auth_login(array $params=[]): never
 {
     $in=json_input();$email=auth_normalize_legacy_email($in['email']??'');$password=(string)($in['password']??'');
@@ -22,36 +53,6 @@ function auth_login(array $params=[]): never
         log_audit((int)$user['id'],$failed>=5?'ACCOUNT_LOCKED':'LOGIN_FAILED','users',(int)$user['id'],['failedAttempts'=>$failed]);fail('Invalid email or password',401,'INVALID_CREDENTIALS');
     }
 
-    function auth_register(array $params=[]): never
-    {
-        $in=json_input();
-        $name=clean_string($in['name']??'',100);
-        $email=normalize_email($in['email']??'');
-        $password=(string)($in['password']??'');
-        $contact=clean_string($in['contact_number']??'',20);
-        $license=clean_string($in['driver_license_number']??'',30);
-        $licenseExpiry=clean_string($in['driver_license_expiry']??'',10);
-        $plate=normalize_plate($in['plate_number']??'');
-        $registration=clean_string($in['vehicle_registration_number']??'',30);
-        $registrationExpiry=clean_string($in['vehicle_registration_expiry']??'',10);
-        $vehicleType=clean_string($in['vehicle_type']??'',20);
-        $vehicleMake=clean_string($in['vehicle_make']??'',80);
-        if($name===''||!filter_var($email,FILTER_VALIDATE_EMAIL)||$password===''||$license===''||$licenseExpiry===''||$plate===''||$registration===''||$registrationExpiry===''||$vehicleType===''||$vehicleMake==='') fail('Complete all required driver, license, and vehicle registration fields.',400,'VALIDATION_ERROR');
-        if(strlen($email)>100||!is_strong_password($password)) fail('Password must be at least 12 characters and include uppercase, lowercase, number, and symbol.',400,'WEAK_PASSWORD');
-        if(!DateTime::createFromFormat('Y-m-d',$licenseExpiry)||!DateTime::createFromFormat('Y-m-d',$registrationExpiry)) fail('License and registration expiry dates must be valid.',400,'VALIDATION_ERROR');
-        if(!in_array($vehicleType,['motorcycle','tricycle','car','truck','bus','van'],true)) fail('Vehicle type is invalid.',400,'VALIDATION_ERROR');
-        if(supabase_select('users',['email'=>'eq.'.$email],['select'=>'id','limit'=>1])) fail('Email already exists',409,'DUPLICATE_EMAIL');
-        $hash=password_hash($password,PASSWORD_BCRYPT,['cost'=>10]);
-        try {
-            $rows=supabase_insert('users',[['name'=>$name,'email'=>$email,'password'=>$hash,'role'=>'driver','contact_number'=>$contact?:null,'driver_license_number'=>$license,'driver_license_expiry'=>$licenseExpiry,'plate_number'=>$plate,'vehicle_registration_number'=>$registration,'vehicle_registration_expiry'=>$registrationExpiry,'vehicle_type'=>$vehicleType,'vehicle_make'=>$vehicleMake,'status'=>'active']]);
-        } catch(SupabaseException $e) {
-            if($e->pgCode==='23505') fail('Email already exists',409,'DUPLICATE_EMAIL');
-            throw $e;
-        }
-        $id=(int)($rows[0]['id']??0);
-        log_audit($id,'PUBLIC_ACCOUNT_CREATED','users',$id,['role'=>'driver']);
-        json_response(['success'=>true,'message'=>'Account created successfully. You can now sign in.','userId'=>$id,'data'=>['id'=>$id]],201);
-    }
     try{supabase_update('users',['failed_login_attempts'=>0,'locked_until'=>null,'last_login'=>date(DATE_ATOM)],['id'=>'eq.'.(int)$user['id']],false);}catch(Throwable $e){error_log('Login state update skipped: '.$e->getMessage());}
     $secret=(string)(app_config()['token_secret']??'');if(strlen($secret)<32||str_contains($secret,'CHANGE_THIS'))fail('Server authentication is not configured.',500,'AUTH_CONFIG_ERROR');
     $token=token_sign(['id'=>(int)$user['id'],'email'=>$user['email'],'role'=>$user['role'],'name'=>$user['name'],'pwd'=>token_password_fingerprint((string)$user['password'])],$secret,(int)(app_config()['token_ttl_seconds']??28800));
