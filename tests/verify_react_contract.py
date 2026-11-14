@@ -4,14 +4,14 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_PAGES = {
     'Landing','Login','ResetPassword','AdminDashboard','AdminOverview','AdminSettings',
-    'AnalyticsDashboard','AuditLogs','Disputes','IssueTicket','LicensePlateLookup',
+    'AuditLogs','Disputes','IssueTicket','LicensePlateLookup',
     'ManageUsers','ManageViolations','Notifications','OfficerDashboard','Payments',
     'Profile','PublicTicketLookup','Reports','TicketDetails','ViewTickets'
 }
 REQUIRED_ROUTES = {
     '/', '/login', '/reset-password', '/ticket-lookup',
     '/admin', '/admin/overview', '/admin/users', '/admin/violations', '/admin/payments',
-    '/admin/disputes', '/admin/reports', '/admin/analytics', '/admin/audit-logs', '/admin/settings',
+    '/admin/disputes', '/admin/reports', '/admin/audit-logs', '/admin/settings',
     '/officer', '/officer/issue-ticket', '/officer/tickets', '/officer/lookup',
     '/notifications', '/profile', '/tickets/:id'
 }

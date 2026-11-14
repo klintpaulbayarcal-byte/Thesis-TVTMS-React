@@ -27,3 +27,8 @@ This package is not itself proof that the live Supabase project, Hostinger
 runtime, credentials, email transport, QR scanning, printing, or production
 workflows have been verified.
 
+Ticket history/payment change:
+- Review and stage-test the four forward-only migrations listed in docs/TICKET_HISTORY_PAYMENT_DEPLOYMENT.md, in filename order, before application upload.
+- The guarded workflow uses the owner-approved fixed Hostinger IP fallback. TLS encryption, CA verification, the exact IP allowlist, and the expected Hostinger certificate SAN remain enforced; hostname matching is disabled because the plan hostname is unavailable.
+- Follow docs/TICKET_HISTORY_PAYMENT_DEPLOYMENT.md from the source review copy.
+- Never overwrite an existing private api/config/config.local.php or runtime uploads directory.

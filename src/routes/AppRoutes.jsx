@@ -4,12 +4,12 @@ import PublicLayout from '../layouts/PublicLayout';
 import AppLayout from '../layouts/AppLayout';
 import Landing from '../pages/Landing';
 import Login from '../pages/Login';
+import Register from '../pages/Register';
 import ResetPassword from '../pages/ResetPassword';
 import PublicTicketLookup from '../pages/PublicTicketLookup';
 import AdminDashboard from '../pages/AdminDashboard';
 import AdminOverview from '../pages/AdminOverview';
 import AdminSettings from '../pages/AdminSettings';
-import AnalyticsDashboard from '../pages/AnalyticsDashboard';
 import AuditLogs from '../pages/AuditLogs';
 import Disputes from '../pages/Disputes';
 import IssueTicket from '../pages/IssueTicket';
@@ -33,10 +33,14 @@ export default function AppRoutes(){
       <Route path="/ticket-lookup" element={<PublicTicketLookup/>}/>
     </Route>
     <Route path="/login" element={<Login/>}/>
+    <Route path="/register" element={<Register/>}/>
     <Route path="/reset-password" element={<ResetPassword/>}/>
 
-    <Route element={secure(['admin','apprehending_officer'], <AppLayout/>)}>
+    <Route element={secure(['admin','apprehending_officer','driver'], <AppLayout/>)}>
       <Route path="/profile" element={<Profile/>}/>
+    </Route>
+
+    <Route element={secure(['admin','apprehending_officer'], <AppLayout/>)}>
       <Route path="/notifications" element={<Notifications/>}/>
       <Route path="/tickets/:id" element={<TicketDetails/>}/>
 
@@ -47,7 +51,6 @@ export default function AppRoutes(){
       <Route path="/admin/payments" element={secure(['admin'], <Payments/>)}/>
       <Route path="/admin/disputes" element={secure(['admin'], <Disputes/>)}/>
       <Route path="/admin/reports" element={secure(['admin'], <Reports/>)}/>
-      <Route path="/admin/analytics" element={secure(['admin'], <AnalyticsDashboard/>)}/>
       <Route path="/admin/audit-logs" element={secure(['admin'], <AuditLogs/>)}/>
       <Route path="/admin/settings" element={secure(['admin'], <AdminSettings/>)}/>
       <Route path="/admin/tickets" element={secure(['admin'], <ViewTickets/>)}/>

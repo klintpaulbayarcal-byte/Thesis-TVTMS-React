@@ -1,0 +1,180 @@
+name: TVTMS targeted email and dispute tests (NO DEPLOY)
+
+on:
+  pull_request:
+    branches:
+      - sync-v4
+  push:
+    branches:
+      - fix/email-preferences-dispute-diagnostics-20261014
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked frontend/test dependencies
+        run: npm ci
+      - name: Assess direct and transitive npm advisories (report only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm audit --json > "$RUNNER_TEMP/tvtms-npm-audit.json" || true
+          python - "$RUNNER_TEMP/tvtms-npm-audit.json" <<'PY'
+          import json, sys
+          from pathlib import Path
+          report=json.loads(Path(sys.argv[1]).read_text())
+          print("npm audit summary:", report.get("metadata", {}).get("vulnerabilities", {}))
+          for name, item in sorted(report.get("vulnerabilities", {}).items()):
+              via=[v.get("name", "") + ":" + str(v.get("range", "")) for v in item.get("via", []) if isinstance(v,dict)]
+              print("package=%s severity=%s direct=%s range=%s via=%s fix=%s" % (
+                  name, item.get("severity"), item.get("isDirect"), item.get("range"),
+                  ",".join(via) or "transitive", bool(item.get("fixAvailable"))))
+          PY
+          npm audit --omit=dev --json > "$RUNNER_TEMP/tvtms-prod-audit.json" || true
+          python - "$RUNNER_TEMP/tvtms-prod-audit.json" <<'PY'
+          import json, sys
+          from pathlib import Path
+          report=json.loads(Path(sys.argv[1]).read_text())
+          print("npm audit production-dependency summary:", report.get("metadata", {}).get("vulnerabilities", {}))
+          for name, item in sorted(report.get("vulnerabilities", {}).items()):
+              print("production dependency advisory: %s (%s)" % (name,item.get("severity")))
+          PY
+      - name: Probe live public dispute validation without creating a dispute
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Intentionally invalid request: empty fields, no ticket, plate, or reason.
+          # Server-side input validation must stop it before any dispute RPC.
+          # Perform exactly one probe and print only its HTTP status.
+          status="$(curl --silent --show-error --max-time 20 --retry 0 \
+            --header 'Content-Type: application/json' \
+            --request POST --data '{}' \
+            --output "$RUNNER_TEMP/tvtms-dispute-probe.txt" \
+            --write-out '%{http_code}' \
+            'https://trafficviolation.dcsbisu.com/api/public/dispute')"
+          echo "Production invalid-dispute validation HTTP status: $status"
+          if [ "$status" = 400 ]; then
+            echo "PHP dispute validation can respond; no real dispute was submitted."
+          else
+            echo "Unexpected status on invalid input. Server/gateway diagnostics still required."
+          fi
+      - name: Verify Gmail SMTP repository secret formats (no email, no deployment)
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_SECURE: ${{ secrets.SMTP_SECURE }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM_EMAIL: ${{ secrets.SMTP_FROM_EMAIL }}
+          SMTP_FROM_NAME: ${{ secrets.SMTP_FROM_NAME }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os, re, sys
+          names=('SMTP_HOST','SMTP_PORT','SMTP_SECURE','SMTP_USERNAME','SMTP_PASSWORD','SMTP_FROM_EMAIL','SMTP_FROM_NAME')
+          s={name:os.environ.get(name,'') for name in names}
+          problems=[]
+          for name in names:
+              if not s[name].strip():
+                  problems.append(name+' is missing')
+          if s['SMTP_HOST'].strip().lower()!='smtp.gmail.com':
+              problems.append('SMTP_HOST must be smtp.gmail.com')
+          if s['SMTP_PORT'].strip()!='587':
+              problems.append('SMTP_PORT must be 587')
+          if s['SMTP_SECURE'].strip().lower()!='tls':
+              problems.append('SMTP_SECURE must be tls')
+          user=s['SMTP_USERNAME'].strip().lower()
+          sender=s['SMTP_FROM_EMAIL'].strip().lower()
+          if not re.fullmatch(r'[a-zA-Z0-9.!#$%&*+/=?^_`{|}~-]+@[a-zA-Z0-9.-]+',user):
+              problems.append('SMTP_USERNAME is not shaped like an email address')
+          if not user.endswith('@gmail.com'):
+              problems.append('SMTP_USERNAME must use the intended personal Gmail account')
+          if sender!=user:
+              problems.append('SMTP_FROM_EMAIL must match SMTP_USERNAME for Gmail')
+          if len(s['SMTP_PASSWORD'])!=16 or not s['SMTP_PASSWORD'].isascii() or not s['SMTP_PASSWORD'].isalnum():
+              problems.append('SMTP_PASSWORD must be a 16-character Google App Password without spaces')
+          for problem in problems:
+              print('Configuration check:',problem)
+          if problems: sys.exit(1)
+          print('PASS: Repository Gmail SMTP secret formats are consistent. No SMTP connection, email, or deployment was attempted.')
+          PY
+      - name: Probe live dispute handling with verified nonexistent QA citation (no dispute created)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The synthetic ticket was checked against production and does not exist.
+          # The RPC must return TICKET_NOT_FOUND before any INSERT.
+          status="$(curl --silent --show-error --max-time 25 --retry 0 \
+            --header 'Content-Type: application/json' \
+            --request POST \
+            --data '{"ticketNumber":"TVT-QA-NONEXISTENT-20261019","plateNumber":"QA-NO-PLATE","reason":"Diagnostic check with nonexistent citation only"}' \
+            --output "$RUNNER_TEMP/tvtms-safe-dispute-test.json" \
+            --write-out '%{http_code}' \
+            'https://trafficviolation.dcsbisu.com/api/public/dispute')"
+          echo "Nonexistent-citation public dispute HTTP status: $status"
+          if [ "$status" = 404 ]; then
+            echo 'Live validation reaches ticket-not-found; no actual dispute is created.'
+          else
+            echo 'Unexpected response: review Hostinger server-side logs before real submission.'
+          fi
+      - name: Confirm PHP runtime
+        run: |
+          php -v
+          php -r 'exit(PHP_VERSION_ID >= 80100 ? 0 : 1);'
+      - name: Lint changed PHP code
+        run: |
+          php -l api/index.php
+          php -l api/src/mail.php
+          php -l api/src/common.php
+          php -l api/src/handlers/tickets.php
+          php -l api/src/handlers/payments.php
+          php -l api/src/handlers/public.php
+      - name: Offline regressions
+        run: |
+          python -m pip install pytest
+          TVTMS_PHP="$(command -v php)" python -m pytest -q tests/test_email_preference_dispute_guard.py
+      - name: Validate React source
+        run: npm run verify:jsx
+      - name: Run full regression suite
+        run: |
+          TVTMS_PHP="$(command -v php)" TVTMS_PYTHON="$(command -v python)" npm test
+      - name: Build Hostinger package (no deployment)
+        run: |
+          npm run build:hostinger
+          test -f deploy/index.html
+          test -f deploy/api/index.php
+          test ! -e deploy/.env
+          test ! -e deploy/.env.local
+          test ! -e deploy/api/config/config.local.php
+          test ! -e deploy/uploads
+      - name: Package verified Hostinger files (no deployment)
+        run: |
+          (cd deploy && zip -q -r ../TVTMS-review-Hostinger.zip .)
+          unzip -p TVTMS-review-Hostinger.zip index.html > /dev/null
+          unzip -p TVTMS-review-Hostinger.zip api/index.php > /dev/null
+          if unzip -Z1 TVTMS-review-Hostinger.zip | grep -Eq '(^|/)(config\\.local\\.php|\\.env|\\.env\\.local)$|(^|/)uploads/'; then
+            echo 'Refusing to upload a package containing private/runtime files' >&2
+            exit 1
+          fi
+          sha256sum TVTMS-review-Hostinger.zip
+      - name: Upload tested files for instructor-authorized deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: TVTMS-review-Hostinger
+          path: TVTMS-review-Hostinger.zip
+          retention-days: 3
+          if-no-files-found: error

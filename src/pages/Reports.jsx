@@ -1,3 +1,4 @@
+import { effectivePaymentStatus } from '../utils/paymentStatus';
 import { useState } from 'react';
 import { API } from '../services/api';
 import PageHeader from '../components/PageHeader';
@@ -5,14 +6,11 @@ import DataTable from '../components/DataTable';
 import StatCard from '../components/StatCard';
 import Notice from '../components/Notice';
 import StatusBadge from '../components/StatusBadge';
-import { dateOnly, money } from '../utils/format';
+import { displayLocation } from '../utils/locationLabel';
+import { dateOnly, money, manilaDateKey, manilaDaysAgo } from '../utils/format';
 
-const today = () => new Date().toISOString().slice(0, 10);
-const daysAgo = days => {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
-};
+const today = manilaDateKey;
+const daysAgo = manilaDaysAgo;
 
 const advancedOptions = [
   ['collections', 'Collections summary'],
@@ -39,8 +37,9 @@ function advancedColumns(type) {
     { key: 'total_collected', label: 'Collected', render: r => money(r.total_collected ?? r.amount ?? 0) },
   ];
   if (type === 'hotspots') return [
-    { key: 'location', label: 'Location' },
-    { key: 'total_violations', label: 'Violations' },
+    { key: 'location', label: 'Location', render: r => displayLocation(r.location) },
+    { key: 'total_citations', label: 'Citations' },
+    { key: 'total_violations', label: 'Violation occurrences' },
     { key: 'paid_count', label: 'Paid' },
     { key: 'unpaid_count', label: 'Unpaid' },
   ];
@@ -69,7 +68,7 @@ function advancedColumns(type) {
     { key: 'aging_bucket', label: 'Bucket' },
   ];
   return [
-    { key: 'barangay', label: 'Barangay / location' },
+    { key: 'barangay', label: 'Barangay / location', render: r => displayLocation(r.barangay) },
     { key: 'total_tickets', label: 'Tickets' },
     { key: 'paid', label: 'Paid' },
     { key: 'unpaid', label: 'Unpaid' },
@@ -184,8 +183,8 @@ export default function Reports() {
 
     {report&&<section className="report-results-section">
       <div className="section-title-row"><div><span className="section-kicker">RESULTS</span><h2>Report Results</h2><p>Summary and ticket records for the selected reporting period.</p></div></div>
-      <div className="stats-grid report-stats"><StatCard label="Total tickets" value={stats.total??tickets.length}/><StatCard label="Paid" value={stats.paid??0} tone="green"/><StatCard label="Unpaid" value={stats.unpaid??0} tone="amber"/><StatCard label="Cancelled" value={stats.cancelled??0} tone="navy"/><StatCard label="Collections" value={money(stats.totalRevenue??0)} tone="green"/></div>
-      <section className="card report-table-card"><div className="card-header"><div><h3 className="card-title">Operational Insights</h3><p>Detailed citations included in this report.</p></div></div><div className="card-body"><DataTable columns={[{key:'ticket_number',label:'Ticket'},{key:'date_issued',label:'Date',render:r=>dateOnly(r.date_issued)},{key:'plate_number',label:'Plate'},{key:'violation_name',label:'Violation'},{key:'penalty_amount',label:'Penalty',render:r=>money(r.penalty_amount)},{key:'status',label:'Status',render:r=><StatusBadge value={r.status}/> }]} rows={tickets}/></div></section>
+      <div className="stats-grid report-stats"><StatCard label="Total tickets" value={stats.total??tickets.length}/><StatCard label="Paid" value={stats.paid??0} tone="green"/><StatCard label="Unpaid" value={stats.unpaid??0} tone="amber"/><StatCard label="Partially paid" value={stats.partially_paid??0} tone="amber"/><StatCard label="Cancelled" value={stats.cancelled??0} tone="navy"/><StatCard label="Collections" value={money(stats.totalRevenue??0)} tone="green"/></div>
+      <section className="card report-table-card"><div className="card-header"><div><h3 className="card-title">Operational Insights</h3><p>Detailed citations included in this report.</p></div></div><div className="card-body"><DataTable columns={[{key:'ticket_number',label:'Ticket'},{key:'date_issued',label:'Date',render:r=>dateOnly(r.date_issued)},{key:'plate_number',label:'Plate'},{key:'violation_name',label:'Violations',render:row=>row.violations?.map(v=>v.violation_name).join('; ')||row.violation_name},{key:'penalty_amount',label:'Penalty',render:r=>money(r.penalty_amount)},{key:'status',label:'Status',render:r=><StatusBadge value={effectivePaymentStatus(r)}/> }]} rows={tickets}/></div></section>
     </section>}
 
     <section className="card lgu-report-card">
