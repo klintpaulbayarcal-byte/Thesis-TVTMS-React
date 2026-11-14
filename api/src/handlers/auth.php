@@ -23,7 +23,7 @@ function auth_register(array $params=[]): never
     $vehicleType=clean_string($in['vehicle_type']??'',20);
     $vehicleMake=clean_string($in['vehicle_make']??'',80);
     if($name===''||!filter_var($email,FILTER_VALIDATE_EMAIL)||$password===''||$license===''||$licenseExpiry===''||$plate===''||$registration===''||$registrationExpiry===''||$vehicleType===''||$vehicleMake==='') fail('Complete all required driver, license, and vehicle registration fields.',400,'VALIDATION_ERROR');
-    if(strlen($email)>100||!is_strong_password($password)) fail('Password must be at least 12 characters and include uppercase, lowercase, number, and symbol.',400,'WEAK_PASSWORD');
+    if(strlen($email)>100||strlen($password)<8) fail('Password must be at least 8 characters.',400,'WEAK_PASSWORD');
     if(!DateTime::createFromFormat('Y-m-d',$licenseExpiry)||!DateTime::createFromFormat('Y-m-d',$registrationExpiry)) fail('License and registration expiry dates must be valid.',400,'VALIDATION_ERROR');
     if(!in_array($vehicleType,['motorcycle','tricycle','car','truck','bus','van'],true)) fail('Vehicle type is invalid.',400,'VALIDATION_ERROR');
     if(supabase_select('users',['email'=>'eq.'.$email],['select'=>'id','limit'=>1])) fail('Email already exists',409,'DUPLICATE_EMAIL');

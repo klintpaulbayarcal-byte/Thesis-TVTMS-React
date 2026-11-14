@@ -39,8 +39,8 @@ export default function Register() {
           <label className="field span-2">Full name<input required value={form.name} onChange={e => set('name', e.target.value)} autoComplete="name" /></label>
           <label className="field">Email address<input required type="email" value={form.email} onChange={e => set('email', e.target.value)} autoComplete="email" /></label>
           <label className="field">Contact number<input required value={form.contact_number} onChange={e => set('contact_number', e.target.value)} autoComplete="tel" /></label>
-          <label className="field">Password<input required type="password" minLength="12" value={form.password} onChange={e => set('password', e.target.value)} autoComplete="new-password" /></label>
-          <label className="field">Confirm password<input required type="password" minLength="12" value={form.confirmPassword} onChange={e => set('confirmPassword', e.target.value)} autoComplete="new-password" /></label>
+          <label className="field">Password<input required type="password" minLength="8" value={form.password} onChange={e => set('password', e.target.value)} autoComplete="new-password" /><small>At least 8 characters.</small></label>
+          <label className="field">Confirm password<input required type="password" minLength="8" value={form.confirmPassword} onChange={e => set('confirmPassword', e.target.value)} autoComplete="new-password" /></label>
         </div>
         <div className="account-form-section"><h2>Driver's license</h2><div className="form-grid">
           <label className="field">License number<input required value={form.driver_license_number} onChange={e => set('driver_license_number', e.target.value)} /></label>
