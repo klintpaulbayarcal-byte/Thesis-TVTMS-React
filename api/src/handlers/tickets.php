@@ -143,26 +143,15 @@ function tickets_mine(array $params=[]): never
     $u=require_role(['driver']);
     $email=strtolower(trim((string)($u['email']??'')));
     if($email==='')fail('Your account does not have an email address.',422,'DRIVER_EMAIL_REQUIRED');
-    $ticketIds=[];
-    foreach(['driver_email_at_issue','owner_email_at_issue'] as $field){
-        $rows=supabase_select('tickets',[$field=>'eq.'.$email],['select'=>'id','order'=>'id.desc','limit'=>1000]);
-        foreach($rows as $row){
-            $id=(int)($row['id']??0);
-            if($id>0)$ticketIds[$id]=true;
-        }
-    }
-    if(!$ticketIds)ok('Your tickets were fetched successfully',[],['tickets'=>[],'pagination'=>['page'=>1,'pageSize'=>0,'total'=>0,'totalPages'=>1]]);
-
-    $ids=array_keys($ticketIds);
-    sort($ids,SORT_NUMERIC);
-    $select='id,ticket_number,date_issued,time_issued,location,status,payment_date,penalty_amount,penalty_amount_at_issue,plate_number,vehicle_type,owner_name,driver_license_number,violation_code,violation_name,demerit_points,violations,citation_version,driver_email_at_issue';
+    $select='id,ticket_number,date_issued,time_issued,location,status,payment_date,penalty_amount,penalty_amount_at_issue,plate_number,vehicle_type,owner_name,owner_email,driver_license_number,violation_code,violation_name,demerit_points,violations,citation_version,driver_email_at_issue';
+    $rows=supabase_select('ticket_details',[],['select'=>$select,'order'=>'date_issued.desc,time_issued.desc,id.desc','limit'=>1000]);
     $matches=[];
-    $batches=array_chunk($ids,100);
-    foreach($batches as $batch){
-        $rows=supabase_select('ticket_details',['id'=>'in.'.implode(',',$batch)],['select'=>$select,'order'=>'date_issued.desc,time_issued.desc,id.desc']);
-        foreach($rows as $row){
-            $id=(int)($row['id']??0);
-            if($id>0)$matches[$id]=$row;
+    foreach($rows as $row){
+        $ticketEmail=strtolower(trim((string)($row['driver_email_at_issue']??'')));
+        if($ticketEmail!==''&&hash_equals($email,$ticketEmail))$matches[(int)$row['id']]=$row;
+        elseif($ticketEmail===''){
+            $legacyEmail=strtolower(trim((string)($row['owner_email']??'')));
+            if($legacyEmail!==''&&hash_equals($email,$legacyEmail))$matches[(int)$row['id']]=$row;
         }
     }
     $tickets=ticket_enrich_payment_totals(array_values($matches));
