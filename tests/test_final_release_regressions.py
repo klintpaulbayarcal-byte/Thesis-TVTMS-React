@@ -1,11 +1,12 @@
 import json
 import os
 import subprocess
+import pytest
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PHP = Path(r"C:\tools\php83\php.exe")
+PHP = Path(os.environ.get("TVTMS_PHP", r"C:\tools\php83\php.exe"))
 
 
 def run_php(script: str) -> subprocess.CompletedProcess[str]:
@@ -102,19 +103,19 @@ auth_logout([]);'''
     assert ["audit", "LOGOUT"] in body["calls"]
 
 
-def invoke_public_dispute(owner_matches: bool) -> dict:
+def invoke_public_dispute(body: dict, rpc_result=None) -> dict:
     handler = json.dumps(str(ROOT / "api/src/handlers/public.php"))
-    match = "true" if owner_matches else "false"
-    script = f'''$selectCalls=0;$rpcCalls=0;
-function json_input(): array {{ return ["ticket_number"=>"TVT-2026-000001","email"=>"owner@example.invalid","reason"=>"A sufficiently detailed dispute reason."]; }}
+    response = json.dumps(json.dumps(rpc_result if rpc_result is not None else {"disputeId": 99}))
+    script = f'''$rpcCalls=[];$body=json_decode({json.dumps(json.dumps(body))},true);
+function json_input(): array {{ global $body;return $body; }}
 function clean_string($value,int $max=4000): string {{ return substr(trim((string)$value),0,$max); }}
-function normalize_email($value): string {{ return strtolower(trim((string)$value)); }}
-function supabase_select(string $table,array $filters,array $options=[]): array {{ global $selectCalls; $selectCalls++; return {match} ? [["id"=>44]] : []; }}
-function supabase_rpc(string $name,array $args=[]): mixed {{ global $rpcCalls; $rpcCalls++; return ["disputeId"=>99]; }}
-function rpc_domain_error(mixed $result): ?array {{ return null; }}
-function fail_domain(array $error): never {{ exit(2); }}
-function fail(string $message,int $status=400,string $errorCode="ERROR",array $extra=[]): never {{ global $selectCalls,$rpcCalls; echo json_encode(["status"=>$status,"errorCode"=>$errorCode,"selectCalls"=>$selectCalls,"rpcCalls"=>$rpcCalls]); exit; }}
-function json_response(array $payload,int $status=200): never {{ global $selectCalls,$rpcCalls; echo json_encode(["status"=>$status,"payload"=>$payload,"selectCalls"=>$selectCalls,"rpcCalls"=>$rpcCalls]); exit; }}
+function normalize_plate($value): string {{ return strtoupper(preg_replace('/[\\s-]+/','',trim($value))); }}
+class SupabaseException extends RuntimeException {{ public ?string $pgCode; public function __construct(string $code) {{ parent::__construct('private database detail owner@example.test secret-key'); $this->pgCode=$code; }} }}
+function supabase_rpc(string $name,array $args=[]): mixed {{ global $rpcCalls;$rpcCalls[]=[$name,$args];$r=json_decode({response},true);if(isset($r['_throw'])){{if($r['_throw']==='transport')throw new RuntimeException('private connection secret-key');throw new SupabaseException($r['_throw']);}}return $r; }}
+function rpc_domain_error(mixed $result): ?array {{ return is_array($result)&&isset($result['errorCode'])?$result:null; }}
+function fail_domain(array $error): never {{ fail($error['message'],$error['statusCode'],$error['errorCode']); }}
+function fail(string $message,int $status=400,string $errorCode="ERROR",array $extra=[]): never {{ global $rpcCalls;echo json_encode(["status"=>$status,"message"=>$message,"errorCode"=>$errorCode,"rpcCalls"=>$rpcCalls]);exit; }}
+function json_response(array $payload,int $status=200): never {{ global $rpcCalls;echo json_encode(["status"=>$status,"payload"=>$payload,"rpcCalls"=>$rpcCalls]);exit; }}
 require {handler};
 public_dispute([]);'''
     result = run_php(script)
@@ -122,19 +123,69 @@ public_dispute([]);'''
     return json.loads(result.stdout)
 
 
-def test_public_dispute_requires_matching_owner_email_before_rpc():
-    """Knowing only a ticket number must not let an anonymous caller open a dispute."""
-    rejected = invoke_public_dispute(False)
-    assert rejected == {
-        "status": 404,
-        "errorCode": "TICKET_VERIFICATION_FAILED",
-        "selectCalls": 1,
-        "rpcCalls": 0,
-    }
-    accepted = invoke_public_dispute(True)
+def test_public_dispute_sends_ticket_plate_and_reason_to_eligibility_rpc():
+    """Caller-controlled email and obsolete tokens never reach dispute storage."""
+    reason = "A sufficiently detailed dispute reason."
+    accepted = invoke_public_dispute({"ticketNumber": " tvt-2026-000001 ", "plateNumber": " abc-123 ", "email": "ignored@example.invalid", "reason": reason})
     assert accepted["status"] == 201
-    assert accepted["selectCalls"] == 1
-    assert accepted["rpcCalls"] == 1
+    assert accepted["rpcCalls"] == [["tvtms_public_dispute_submit", {"p_ticket": "TVT-2026-000001", "p_plate": "ABC123", "p_reason": reason}]]
+    assert "ignored@example.invalid" not in json.dumps(accepted)
+
+
+@pytest.mark.parametrize('reason', ['', ' ' * 20, 'short', 'x' * 4001, 'é' * 9, [], None])
+def test_public_dispute_rejects_invalid_reasons_without_rpc(reason):
+    result = invoke_public_dispute({'ticketNumber': 'TVT-2026-000001', 'plateNumber': 'ABC123', 'reason': reason})
+    assert result['status'] == 400
+    assert result['errorCode'] == 'VALIDATION_ERROR'
+    assert result['rpcCalls'] == []
+
+
+@pytest.mark.parametrize('reason', ['x' * 10, 'x' * 4000, 'é' * 10, 'é' * 4000])
+def test_public_dispute_accepts_reason_character_boundaries_without_truncation(reason):
+    result = invoke_public_dispute({'ticketNumber': 'TVT-2026-000001', 'plateNumber': 'ABC123', 'reason': reason})
+    assert result['status'] == 201
+    assert result['rpcCalls'][0][1]['p_reason'] == reason
+
+
+@pytest.mark.parametrize('code,status', [
+    ('TICKET_NOT_FOUND', 404), ('INVALID_TICKET_STATUS', 403),
+    ('DISPUTE_DEADLINE_EXPIRED', 403), ('DISPUTE_ALREADY_EXISTS', 409),
+    ('TICKET_PLATE_MISMATCH', 403), ('PAYMENT_EXISTS', 403),
+])
+def test_public_dispute_propagates_server_eligibility_rejections(code, status):
+    result = invoke_public_dispute(
+        {'ticketNumber': 'TVT-2026-000001', 'plateNumber': 'ABC123', 'reason': 'Please review this ticket.'},
+        {'errorCode': code, 'statusCode': status, 'message': 'Rejected by policy.'},
+    )
+    assert result['status'] == status
+    assert result['errorCode'] == code
+
+
+def test_public_dispute_never_reports_success_for_malformed_rpc_result():
+    result = invoke_public_dispute({'ticketNumber': 'TVT-2026-000001', 'plateNumber': 'ABC123', 'reason': 'Please review this ticket.'}, {})
+    assert result['status'] == 503
+    assert result['errorCode'] == 'PUBLIC_DISPUTE_UNAVAILABLE'
+
+
+@pytest.mark.parametrize('plate', [None, '', ' - ', [], 'X' * 31])
+def test_public_dispute_requires_valid_plate(plate):
+    result = invoke_public_dispute({'ticketNumber': 'TVT-2026-000001', 'plateNumber': plate, 'reason': 'Please review this ticket.'})
+    assert result['status'] == 400
+    assert result['rpcCalls'] == []
+
+
+@pytest.mark.parametrize('failure,code', [
+    ('PGRST202', 'PUBLIC_DISPUTE_NOT_CONFIGURED'), ('42883', 'PUBLIC_DISPUTE_NOT_CONFIGURED'),
+    ('42501', 'PUBLIC_DISPUTE_UNAVAILABLE'), ('transport', 'PUBLIC_DISPUTE_UNAVAILABLE'),
+])
+def test_public_dispute_rpc_unavailability_has_safe_actionable_error(failure, code):
+    result = invoke_public_dispute({'ticketNumber': 'TVT-2026-000001', 'plateNumber': 'ABC123', 'reason': 'Please review this ticket.'}, {'_throw': failure})
+    assert result['status'] == 503
+    assert result['errorCode'] == code
+    assert 'contact the issuing office' in result['message']
+    assert 'Database operation failed' not in result['message']
+    assert 'secret-key' not in json.dumps(result)
+    assert 'owner@example.test' not in json.dumps(result)
 
 
 def test_development_router_serves_files_from_the_real_uploads_directory():
@@ -183,7 +234,9 @@ def test_manual_ticket_status_cannot_fabricate_payment_history():
     valid_statuses = handler.split("$valid=", 1)[1].split(";", 1)[0]
     assert "partially_paid" not in valid_statuses
     assert "status==='partially_paid'" in handler
-    assert "partially_paid" not in migration.split("elsif p_action='status'", 1)[1].split("elsif p_action='details'", 1)[0]
+    status_branch = migration.split("elsif p_action='status'", 1)[1].lower()
+    assert "v_status in ('paid','partially_paid')" in status_branch
+    assert "payment_required" in status_branch
 
 
 def test_evidence_upload_enforces_ticket_count_and_byte_quotas():
@@ -198,5 +251,6 @@ def test_financial_reports_subtract_non_voided_payments_from_penalties():
     payment_status = migration.split("create or replace function public.tvtms_report_payment_status", 1)[1].split("revoke all on function public.tvtms_report_payment_status", 1)[0]
     aging = migration.split("create or replace function public.tvtms_report_aging", 1)[1].split("revoke all on function public.tvtms_report_aging", 1)[0]
     for function_body in (payment_status, aging):
-        assert "payment_status<>'voided'" in function_body
-        assert "greatest(" in function_body
+        normalized = function_body.lower()
+        assert "payment_status<>'voided'" in normalized
+        assert "greatest(" in normalized

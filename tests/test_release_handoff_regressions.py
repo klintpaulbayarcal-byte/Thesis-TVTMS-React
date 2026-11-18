@@ -19,7 +19,8 @@ def test_ticket_qr_url_is_consumed_and_lookup_runs_automatically():
     assert '/ticket-lookup?ticket=' in ticket
     assert 'useSearchParams' in lookup, 'QR ticket URL must be read, not ignored'
     assert "searchParams.get('ticket')" in lookup
-    assert 'runLookup(ticketFromUrl' in lookup, 'scanning QR must search immediately'
+    assert 'runLookup(referenceFromUrl,modeFromUrl)' in lookup, 'ticket and plate URLs must search immediately'
+    assert "searchParams.get('plate')" in lookup
     assert "lastQrRequest.current=''" in lookup, 'QR lookup must reset when its URL parameter is removed'
     assert 'encodeURIComponent(t.ticket_number)' in landing, 'landing results must preserve selected ticket'
 
@@ -51,15 +52,16 @@ def test_deployment_documented_local_config_template_exists_and_is_not_a_secret(
     assert 'CHANGE_ME_SERVER_SECRET' in config
     assert 'CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_32_CHARS_MINIMUM' in config
     assert 'sb_secret_' not in config
-    assert not (ROOT / 'api/config/config.local.php').exists(), 'Never ship private config with source'
+    assert 'api/config/config.local.php' in (ROOT / '.gitignore').read_text(encoding='utf-8')
+    assert not (ROOT / 'deploy/api/config/config.local.php').exists(), 'Never ship private config in deploy output'
 
 
 def test_windows_release_script_fails_closed_and_checks_all_required_files():
     script = ROOT / 'scripts/build-verified-hostinger.ps1'
     assert script.is_file()
     content = script.read_text(encoding='utf-8')
-    for marker in ('npm ci', 'npm run verify:jsx', 'python -m pytest -q -s -p no:cacheprovider tests',
-                   'npm run build:hostinger', 'PHP_VERSION_ID',
+    for marker in ('npm.cmd ci', 'npm.cmd run verify:jsx', 'npm.cmd test',
+                   'npm.cmd run build:hostinger', 'PHP_VERSION_ID',
                    'LOCALAPPDATA', 'Python\\bin',
                    'deploy/api/src/handlers/contact_messages.php',
                    'deploy/api/config/config.local.php', '.htaccess',

@@ -8,6 +8,37 @@ function auth_normalize_legacy_email(mixed $value): string
     return $email;
 }
 
+function auth_register(array $params=[]): never
+{
+    $in=json_input();
+    $name=clean_string($in['name']??'',100);
+    $email=normalize_email($in['email']??'');
+    $password=(string)($in['password']??'');
+    $contact=clean_string($in['contact_number']??'',20);
+    $license=clean_string($in['driver_license_number']??'',30);
+    $licenseExpiry=clean_string($in['driver_license_expiry']??'',10);
+    $plate=normalize_plate($in['plate_number']??'');
+    $registration=clean_string($in['vehicle_registration_number']??'',30);
+    $registrationExpiry=clean_string($in['vehicle_registration_expiry']??'',10);
+    $vehicleType=clean_string($in['vehicle_type']??'',20);
+    $vehicleMake=clean_string($in['vehicle_make']??'',80);
+    if($name===''||!filter_var($email,FILTER_VALIDATE_EMAIL)||$password===''||$license===''||$licenseExpiry===''||$plate===''||$registration===''||$registrationExpiry===''||$vehicleType===''||$vehicleMake==='') fail('Complete all required driver, license, and vehicle registration fields.',400,'VALIDATION_ERROR');
+    if(strlen($email)>100||strlen($password)<8) fail('Password must be at least 8 characters.',400,'WEAK_PASSWORD');
+    if(!DateTime::createFromFormat('Y-m-d',$licenseExpiry)||!DateTime::createFromFormat('Y-m-d',$registrationExpiry)) fail('License and registration expiry dates must be valid.',400,'VALIDATION_ERROR');
+    if(!in_array($vehicleType,['motorcycle','tricycle','car','truck','bus','van'],true)) fail('Vehicle type is invalid.',400,'VALIDATION_ERROR');
+    if(supabase_select('users',['email'=>'eq.'.$email],['select'=>'id','limit'=>1])) fail('Email already exists',409,'DUPLICATE_EMAIL');
+    $hash=password_hash($password,PASSWORD_BCRYPT,['cost'=>10]);
+    try {
+        $rows=supabase_insert('users',[['name'=>$name,'email'=>$email,'password'=>$hash,'role'=>'driver','contact_number'=>$contact?:null,'driver_license_number'=>$license,'driver_license_expiry'=>$licenseExpiry,'plate_number'=>$plate,'vehicle_registration_number'=>$registration,'vehicle_registration_expiry'=>$registrationExpiry,'vehicle_type'=>$vehicleType,'vehicle_make'=>$vehicleMake,'status'=>'active']]);
+    } catch(SupabaseException $e) {
+        if($e->pgCode==='23505') fail('Email already exists',409,'DUPLICATE_EMAIL');
+        throw $e;
+    }
+    $id=(int)($rows[0]['id']??0);
+    log_audit($id,'PUBLIC_ACCOUNT_CREATED','users',$id,['role'=>'driver']);
+    json_response(['success'=>true,'message'=>'Account created successfully. You can now sign in.','userId'=>$id,'data'=>['id'=>$id]],201);
+}
+
 function auth_login(array $params=[]): never
 {
     $in=json_input();$email=auth_normalize_legacy_email($in['email']??'');$password=(string)($in['password']??'');
@@ -15,12 +46,13 @@ function auth_login(array $params=[]): never
     $rows=supabase_select('users',['email'=>'eq.'.$email,'status'=>'eq.active'],['select'=>'*','limit'=>1]);
     if(!$rows){log_audit(null,'LOGIN_FAILED','auth',null,['email'=>$email,'reason'=>'user_not_found_or_inactive']);fail('Invalid email or password',401,'INVALID_CREDENTIALS');}
     $user=$rows[0];
-    if(!in_array($user['role']??'', ['admin','apprehending_officer'],true)){log_audit((int)$user['id'],'LOGIN_BLOCKED_DISABLED_ROLE','users',(int)$user['id'],['role'=>$user['role']??null]);fail('This account role is no longer supported.',403,'DISABLED_ROLE');}
+    if(!in_array($user['role']??'', ['admin','apprehending_officer','driver'],true)){log_audit((int)$user['id'],'LOGIN_BLOCKED_DISABLED_ROLE','users',(int)$user['id'],['role'=>$user['role']??null]);fail('This account role is no longer supported.',403,'DISABLED_ROLE');}
     if(!empty($user['locked_until'])&&strtotime((string)$user['locked_until'])>time()){log_audit((int)$user['id'],'LOGIN_BLOCKED_LOCKED','users',(int)$user['id'],['lockedUntil'=>$user['locked_until']]);fail('Account is temporarily locked due to too many failed login attempts. Please try again later.',423,'ACCOUNT_LOCKED');}
     if(!password_verify($password,(string)$user['password'])){
         $failed=(int)($user['failed_login_attempts']??0)+1;try{supabase_rpc('tvtms_account_failed_login',['p_id'=>(int)$user['id'],'p_max_attempts'=>5,'p_lock_minutes'=>15]);}catch(Throwable $e){error_log('Lockout update skipped: '.$e->getMessage());}
         log_audit((int)$user['id'],$failed>=5?'ACCOUNT_LOCKED':'LOGIN_FAILED','users',(int)$user['id'],['failedAttempts'=>$failed]);fail('Invalid email or password',401,'INVALID_CREDENTIALS');
     }
+
     try{supabase_update('users',['failed_login_attempts'=>0,'locked_until'=>null,'last_login'=>date(DATE_ATOM)],['id'=>'eq.'.(int)$user['id']],false);}catch(Throwable $e){error_log('Login state update skipped: '.$e->getMessage());}
     $secret=(string)(app_config()['token_secret']??'');if(strlen($secret)<32||str_contains($secret,'CHANGE_THIS'))fail('Server authentication is not configured.',500,'AUTH_CONFIG_ERROR');
     $token=token_sign(['id'=>(int)$user['id'],'email'=>$user['email'],'role'=>$user['role'],'name'=>$user['name'],'pwd'=>token_password_fingerprint((string)$user['password'])],$secret,(int)(app_config()['token_ttl_seconds']??28800));
@@ -53,5 +85,5 @@ function auth_reset_password(array $params=[]): never
 
 function auth_profile(array $params=[]): never
 {
-    $u=require_role(['admin','apprehending_officer']);$rows=supabase_select('users',['id'=>'eq.'.(int)$u['id']],['select'=>'id,name,email,role,contact_number,plate_number,created_at','limit'=>1]);if(!$rows)fail('User not found',404,'USER_NOT_FOUND');json_response(['success'=>true,'user'=>$rows[0],'data'=>$rows[0]]);
+    $u=require_role(['admin','apprehending_officer','driver']);$rows=supabase_select('users',['id'=>'eq.'.(int)$u['id']],['select'=>'id,name,email,role,officer_rank,contact_number,driver_license_number,driver_license_expiry,plate_number,vehicle_registration_number,vehicle_registration_expiry,vehicle_type,vehicle_make,created_at','limit'=>1]);if(!$rows)fail('User not found',404,'USER_NOT_FOUND');json_response(['success'=>true,'user'=>$rows[0],'data'=>$rows[0]]);
 }

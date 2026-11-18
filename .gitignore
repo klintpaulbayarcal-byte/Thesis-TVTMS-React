@@ -2,9 +2,14 @@ node_modules/
 dist/
 deploy/
 api/config/config.local.php
+api/.release-*
 .env
 .env.*
 !.env.example
 .pytest_cache/
+.test-tmp/
 __pycache__/
 *.pyc
+*.zip
+*.bak
+artifacts/

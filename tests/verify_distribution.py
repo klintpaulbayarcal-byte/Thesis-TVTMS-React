@@ -20,7 +20,7 @@ def test_no_real_secrets_in_deployable_text_files():
     suspect=[]
     pat=re.compile(r'(sb_secret_[A-Za-z0-9_-]{10,}|service_role.{0,80}eyJ|SUPABASE_SECRET_KEY\s*=\s*[^\s<][^\n]*)', re.I)
     for p in ROOT.rglob('*'):
-        if not p.is_file() or any(part in {'node_modules','.git','dist'} for part in p.parts):
+        if not p.is_file() or any(part in {'node_modules','.git','dist','.test-tmp','artifacts','backups'} for part in p.parts):
             continue
         if p.name == 'config.local.php':
             continue

@@ -22,7 +22,7 @@ export default function Login(){
     return () => document.body.classList.remove('login-modern');
   }, []);
 
-  if (user) return <Navigate to={user.role === 'admin' ? '/admin' : '/officer'} replace />;
+  if (user) return <Navigate to={user.role === 'admin' ? '/admin' : user.role === 'apprehending_officer' ? '/officer' : '/profile'} replace />;
 
   const submit = async (event) => {
     event.preventDefault();
@@ -30,7 +30,7 @@ export default function Login(){
     setBusy(true);
     try {
       const authenticated = await login(form);
-      const fallback = authenticated.role === 'admin' ? '/admin' : '/officer';
+      const fallback = authenticated.role === 'admin' ? '/admin' : authenticated.role === 'apprehending_officer' ? '/officer' : '/profile';
       const from = location.state?.from?.pathname;
       navigate(from && from !== '/login' ? from : fallback, { replace: true });
     } catch (authError) {
@@ -166,6 +166,9 @@ export default function Login(){
         </form>
 
         <p className="register-line">
+          Need a public driver account?{' '}
+          <Link className="public-lookup-link" to="/register">Create an account</Link>
+          <br />
           Need to check a traffic citation?{' '}
           <Link className="public-lookup-link" to="/ticket-lookup">Open the public lookup</Link>
         </p>
