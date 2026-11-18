@@ -152,6 +152,23 @@ function tickets_mine(array $params=[]): never
             if($id>0)$matches[$id]=$row;
         }
     }
+
+    $accountName=preg_replace('/\s+/',' ',strtolower(trim((string)($u['name']??''))));
+    $accountPlate=strtoupper(trim((string)($u['plate_number']??'')));
+    $accountLicense=strtoupper(trim((string)($u['driver_license_number']??'')));
+    if($accountName!==''&&($accountPlate!==''||$accountLicense!=='')){
+        $identityRows=supabase_select('ticket_details',[],['select'=>$select,'order'=>'date_issued.desc,time_issued.desc,id.desc','limit'=>1000]);
+        foreach($identityRows as $row){
+            $id=(int)($row['id']??0);
+            if($id<=0)continue;
+            $ticketName=preg_replace('/\s+/',' ',strtolower(trim((string)($row['owner_name']??''))));
+            $ticketPlate=strtoupper(trim((string)($row['plate_number']??'')));
+            $ticketLicense=strtoupper(trim((string)($row['driver_license_number']??'')));
+            $plateMatches=$accountPlate!==''&&$ticketPlate!==''&&$accountPlate===$ticketPlate;
+            $licenseMatches=$accountLicense!==''&&$ticketLicense!==''&&$accountLicense===$ticketLicense;
+            if($accountName!==''&&$ticketName===$accountName&&($plateMatches||$licenseMatches))$matches[$id]=$row;
+        }
+    }
     $tickets=ticket_enrich_payment_totals(array_values($matches));
     usort($tickets,static function(array $left,array $right): int {
         return strcmp((string)($right['date_issued']??'').' '.(string)($right['time_issued']??'').' '.(string)($right['id']??''),(string)($left['date_issued']??'').' '.(string)($left['time_issued']??'').' '.(string)($left['id']??''));
