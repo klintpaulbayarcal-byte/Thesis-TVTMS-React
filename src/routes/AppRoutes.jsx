@@ -16,6 +16,7 @@ import IssueTicket from '../pages/IssueTicket';
 import LicensePlateLookup from '../pages/LicensePlateLookup';
 import ManageUsers from '../pages/ManageUsers';
 import ManageViolations from '../pages/ManageViolations';
+import MyTickets from '../pages/MyTickets';
 import Notifications from '../pages/Notifications';
 import OfficerDashboard from '../pages/OfficerDashboard';
 import Payments from '../pages/Payments';
@@ -38,6 +39,7 @@ export default function AppRoutes(){
 
     <Route element={secure(['admin','apprehending_officer','driver'], <AppLayout/>)}>
       <Route path="/profile" element={<Profile/>}/>
+      <Route path="/my-tickets" element={secure(['driver'], <MyTickets/>)}/>
     </Route>
 
     <Route element={secure(['admin','apprehending_officer'], <AppLayout/>)}>

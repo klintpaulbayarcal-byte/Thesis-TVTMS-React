@@ -10,6 +10,7 @@ function ticket_rpc_result(mixed $result): array
         if (($error['errorCode'] ?? '') === 'OFFICER_RANK_REQUIRED') {
             $error['message'] = 'Ask the Administrator to record your rank / designation before issuing a citation.';
         }
+
         fail_domain($error);
     }
     return $result;
@@ -135,6 +136,27 @@ function tickets_list(array $params=[]): never
     if($u['role']==='admin'&&$tickets)$tickets=ticket_admin_delete_eligibility($tickets);
     $pagination=['page'=>$page,'pageSize'=>$pageSize,'total'=>$total,'totalPages'=>max(1,(int)ceil($total/$pageSize))];
     ok('Tickets fetched successfully',$tickets,['tickets'=>$tickets,'pagination'=>$pagination]);
+}
+
+function tickets_mine(array $params=[]): never
+{
+    $u=require_role(['driver']);
+    $email=strtolower(trim((string)($u['email']??'')));
+    if($email==='')fail('Your account does not have an email address.',422,'DRIVER_EMAIL_REQUIRED');
+    $select='id,ticket_number,date_issued,time_issued,location,status,payment_date,penalty_amount,penalty_amount_at_issue,plate_number,vehicle_type,owner_name,driver_license_number,violation_code,violation_name,demerit_points,violations,citation_version,driver_email_at_issue';
+    $matches=[];
+    foreach(['driver_email_at_issue','owner_email'] as $field){
+        $rows=supabase_select('ticket_details',[$field=>'eq.'.$email],['select'=>$select,'order'=>'date_issued.desc,time_issued.desc,id.desc']);
+        foreach($rows as $row){
+            $id=(int)($row['id']??0);
+            if($id>0)$matches[$id]=$row;
+        }
+    }
+    $tickets=ticket_enrich_payment_totals(array_values($matches));
+    usort($tickets,static function(array $left,array $right): int {
+        return strcmp((string)($right['date_issued']??'').' '.(string)($right['time_issued']??'').' '.(string)($right['id']??''),(string)($left['date_issued']??'').' '.(string)($left['time_issued']??'').' '.(string)($left['id']??''));
+    });
+    ok('Your tickets were fetched successfully',$tickets,['tickets'=>$tickets,'pagination'=>['page'=>1,'pageSize'=>count($tickets),'total'=>count($tickets),'totalPages'=>1]]);
 }
 
 function tickets_get_qr_link(array $params): never

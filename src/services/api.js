@@ -149,6 +149,7 @@ export const API = {
   penaltyPreview: (id, plateNumber) => apiRequest(`/violations/${id}/penalty-preview?${qs({ plateNumber })}`),
 
   tickets: (filters, options) => apiRequest(`/tickets${qs(filters) ? `?${qs(filters)}` : ''}`, options),
+  myTickets: () => apiRequest('/tickets/mine'),
   ticket: id => apiRequest(`/tickets/${id}`),
   ticketQrLink: id => apiRequest(`/tickets/${id}/qr-link`),
   citationContext: () => apiRequest('/tickets/issuance-context'),

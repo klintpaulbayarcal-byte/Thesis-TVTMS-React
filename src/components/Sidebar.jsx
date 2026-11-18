@@ -16,7 +16,7 @@ const officerSections = [
   ['ACCOUNT', [['/notifications','Notifications','bell'],['/profile','My Profile','user']]],
 ];
 const driverSections = [
-  ['PUBLIC USER', [['/ticket-lookup','Ticket Lookup','search']]],
+  ['PUBLIC USER', [['/my-tickets','My Tickets','ticket'],['/ticket-lookup','Ticket Lookup','search']]],
   ['ACCOUNT', [['/profile','My Profile','user']]],
 ];
 
